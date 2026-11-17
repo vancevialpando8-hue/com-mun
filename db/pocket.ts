@@ -33,6 +33,7 @@ async function ensurePocketSchema() {
       db.prepare("CREATE TABLE IF NOT EXISTS join_requests (id TEXT PRIMARY KEY, community_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE (community_id, user_id))"),
       db.prepare("CREATE TABLE IF NOT EXISTS callouts (id TEXT PRIMARY KEY, community_id TEXT NOT NULL, author_id TEXT NOT NULL, ticker TEXT NOT NULL, thesis TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
       db.prepare("CREATE TABLE IF NOT EXISTS community_messages (id TEXT PRIMARY KEY, community_id TEXT NOT NULL, author_id TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+      db.prepare("CREATE TABLE IF NOT EXISTS battles (id TEXT PRIMARY KEY, challenger_community_id TEXT NOT NULL, opponent_community_id TEXT NOT NULL, created_by TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', prize_points INTEGER NOT NULL DEFAULT 1200, ends_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
       db.prepare("CREATE TABLE IF NOT EXISTS challenge_completions (challenge_id TEXT NOT NULL, user_id TEXT NOT NULL, completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (challenge_id, user_id))"),
     ]);
     await addColumnIfMissing("ALTER TABLE profiles ADD COLUMN wallet_address TEXT");
@@ -59,6 +60,7 @@ async function ensurePocketSchema() {
       db.prepare("INSERT OR IGNORE INTO memberships (community_id, user_id, role) VALUES ('low-float-society', 'seed:rio', 'leader')"),
       db.prepare("INSERT OR IGNORE INTO community_messages (id, community_id, author_id, body) VALUES ('seed:dd-1', 'discipline-dept', 'seed:nova', 'Morning check: thesis first, entries second. Drop your receipts before you add risk.')"),
       db.prepare("INSERT OR IGNORE INTO community_messages (id, community_id, author_id, body) VALUES ('seed:dd-2', 'discipline-dept', 'seed:ark', 'Week battle is close. Hold the line and keep every update useful.')"),
+      db.prepare("INSERT OR IGNORE INTO battles (id, challenger_community_id, opponent_community_id, created_by, status, prize_points, ends_at) VALUES ('seed:dd-v-lf', 'discipline-dept', 'low-float-society', 'seed:nova', 'active', 18400, '2026-11-24T00:00:00.000Z')"),
     ]);
   })();
   return initialization;
@@ -93,6 +95,15 @@ export async function getCommunityDetail(viewer: Viewer, communityId: string) {
   return { ...community, members: members.results, messages: messages.results.reverse(), callouts: callouts.results, challenges };
 }
 
+export async function getBattleState(viewer: Viewer) {
+  const state = await getPocketState(viewer);
+  const db = getD1();
+  const battles = await db.prepare("SELECT b.id, b.status, b.prize_points as prizePoints, b.ends_at as endsAt, b.created_at as createdAt, challenger.id as challengerId, challenger.name as challengerName, challenger.tag as challengerTag, challenger.weekly_pnl as challengerPnl, opponent.id as opponentId, opponent.name as opponentName, opponent.tag as opponentTag, opponent.weekly_pnl as opponentPnl FROM battles b JOIN communities challenger ON challenger.id = b.challenger_community_id JOIN communities opponent ON opponent.id = b.opponent_community_id WHERE b.status = 'active' ORDER BY b.created_at DESC LIMIT 20").all();
+  const leaderboard = [...state.communities].sort((left, right) => Number(right.weeklyPnl) - Number(left.weeklyPnl)).map((community, index) => ({ ...community, rank: index + 1 }));
+  const eligibleCommunities = state.communities.filter((community) => community.viewerRole === "leader" || community.viewerRole === "co_leader");
+  return { leaderboard, battles: battles.results, eligibleCommunities, communities: state.communities };
+}
+
 function requireText(value: unknown, field: string, min: number, max: number) {
   const result = typeof value === "string" ? value.trim() : "";
   if (result.length < min || result.length > max) throw new Error(`${field} must be between ${min} and ${max} characters.`);
@@ -116,6 +127,23 @@ export async function runPocketAction(viewer: Viewer, payload: Record<string, un
     const walletAddress = requireText(payload.walletAddress, "Wallet address", 4, 120);
     await db.prepare("UPDATE profiles SET wallet_address = ? WHERE id = ?").bind(walletAddress, viewer.id).run();
     return { message: "Wallet address saved. Live wallet PnL needs a connected chain data source." };
+  }
+  if (action === "start-battle") {
+    const challengerCommunityId = requireText(payload.challengerCommunityId, "Your community", 1, 100);
+    const opponentCommunityId = requireText(payload.opponentCommunityId, "Opponent community", 1, 100);
+    if (challengerCommunityId === opponentCommunityId) throw new Error("Choose another community to start a battle.");
+    const membership = await db.prepare("SELECT role FROM memberships WHERE community_id = ? AND user_id = ?").bind(challengerCommunityId, viewer.id).first<{ role: string }>();
+    if (!membership || (membership.role !== "leader" && membership.role !== "co_leader")) throw new Error("Only community leaders can start a battle.");
+    const [challenger, opponent, existingBattle] = await Promise.all([
+      db.prepare("SELECT id, name FROM communities WHERE id = ?").bind(challengerCommunityId).first<{ id: string; name: string }>(),
+      db.prepare("SELECT id, name FROM communities WHERE id = ?").bind(opponentCommunityId).first<{ id: string; name: string }>(),
+      db.prepare("SELECT id FROM battles WHERE status = 'active' AND ((challenger_community_id = ? AND opponent_community_id = ?) OR (challenger_community_id = ? AND opponent_community_id = ?))").bind(challengerCommunityId, opponentCommunityId, opponentCommunityId, challengerCommunityId).first(),
+    ]);
+    if (!challenger || !opponent) throw new Error("One of those communities is no longer available.");
+    if (existingBattle) throw new Error("Those communities already have an active battle.");
+    const endsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    await db.prepare("INSERT INTO battles (id, challenger_community_id, opponent_community_id, created_by, status, prize_points, ends_at) VALUES (?, ?, ?, ?, 'active', 1200, ?)").bind(crypto.randomUUID(), challengerCommunityId, opponentCommunityId, viewer.id, endsAt).run();
+    return { message: `${challenger.name} is now battling ${opponent.name}. The seven-day scoreboard is live.` };
   }
   const communityId = requireText(payload.communityId, "Community", 1, 100);
   const community = await db.prepare("SELECT id, name, privacy, member_count as memberCount, capacity, owner_id as ownerId FROM communities WHERE id = ?").bind(communityId).first<{ id: string; name: string; privacy: string; memberCount: number; capacity: number; ownerId: string }>();

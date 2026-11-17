@@ -59,6 +59,17 @@ export const communityMessages = sqliteTable("community_messages", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const battles = sqliteTable("battles", {
+  id: text("id").primaryKey(),
+  challengerCommunityId: text("challenger_community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
+  opponentCommunityId: text("opponent_community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
+  createdBy: text("created_by").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["active", "complete"] }).notNull().default("active"),
+  prizePoints: integer("prize_points").notNull().default(1200),
+  endsAt: text("ends_at").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const challengeCompletions = sqliteTable("challenge_completions", {
   challengeId: text("challenge_id").notNull(),
   userId: text("user_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
