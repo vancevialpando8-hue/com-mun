@@ -1,5 +1,5 @@
 import { getChatGPTUser } from "../../chatgpt-auth";
-import { getPocketState, runPocketAction, type Viewer } from "../../../db/pocket";
+import { getCommunityDetail, getPocketState, runPocketAction, type Viewer } from "../../../db/pocket";
 
 async function viewerFromRequest(): Promise<Viewer> {
   const user = await getChatGPTUser();
@@ -11,9 +11,12 @@ function messageFor(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    return Response.json(await getPocketState(await viewerFromRequest()));
+    const viewer = await viewerFromRequest();
+    const communityId = new URL(request.url).searchParams.get("communityId");
+    if (communityId) return Response.json({ state: await getPocketState(viewer), community: await getCommunityDetail(viewer, communityId) });
+    return Response.json(await getPocketState(viewer));
   } catch (error) {
     return Response.json({ error: messageFor(error) }, { status: 500 });
   }

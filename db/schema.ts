@@ -6,6 +6,9 @@ export const profiles = sqliteTable("profiles", {
   displayName: text("display_name").notNull(),
   xp: integer("xp").notNull().default(240),
   referrals: integer("referrals").notNull().default(0),
+  walletAddress: text("wallet_address"),
+  walletPnl: text("wallet_pnl").notNull().default("0.0"),
+  memberStatus: text("member_status").notNull().default("Scout"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -45,6 +48,14 @@ export const callouts = sqliteTable("callouts", {
   authorId: text("author_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
   ticker: text("ticker").notNull(),
   thesis: text("thesis").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const communityMessages = sqliteTable("community_messages", {
+  id: text("id").primaryKey(),
+  communityId: text("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
+  authorId: text("author_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

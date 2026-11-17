@@ -9,8 +9,10 @@ async function source(path) {
 }
 
 test("ships the community experience instead of the starter preview", async () => {
-  const [page, css, layout] = await Promise.all([
+  const [page, room, profile, css, layout] = await Promise.all([
     source("app/page.tsx"),
+    source("app/community/[id]/page.tsx"),
+    source("app/profile/page.tsx"),
     source("app/globals.css"),
     source("app/layout.tsx"),
   ]);
@@ -20,6 +22,13 @@ test("ships the community experience instead of the starter preview", async () =
   assert.match(page, /create-callout/);
   assert.match(page, /complete-challenge/);
   assert.match(page, /ScrollTrigger/);
+  assert.match(page, /hero-signal/);
+  assert.doesNotMatch(page, /picsum\.photos|hero-image/);
+  assert.match(room, /Community talk/);
+  assert.match(room, /Active callouts/);
+  assert.match(room, /Member roster/);
+  assert.match(profile, /Wallet view/);
+  assert.match(profile, /Member profile/);
   assert.match(css, /grid-auto-flow:dense/);
   assert.match(css, /@keyframes marquee/);
   assert.match(layout, /Pocket — conviction is collective/);
@@ -36,11 +45,16 @@ test("persists the core Pocket workflows in D1", async () => {
 
   assert.match(api, /getPocketState/);
   assert.match(api, /runPocketAction/);
+  assert.match(api, /getCommunityDetail/);
   assert.match(store, /join-community/);
   assert.match(store, /leave-community/);
   assert.match(store, /join_requests/);
   assert.match(store, /member_count < capacity/);
+  assert.match(store, /send-message/);
+  assert.match(store, /save-wallet/);
+  assert.match(store, /community_messages/);
   assert.match(schema, /export const communities/);
   assert.match(schema, /export const memberships/);
+  assert.match(schema, /export const communityMessages/);
   assert.match(hosting, /"d1": "DB"/);
 });
