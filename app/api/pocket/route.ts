@@ -4,7 +4,7 @@ import { getCommunityDetail, getPocketState, runPocketAction, type Viewer } from
 async function viewerFromRequest(): Promise<Viewer> {
   const user = await getChatGPTUser();
   if (user) return { id: `chatgpt:${user.email.toLowerCase()}`, displayName: user.displayName };
-  return { id: "demo:pocket", displayName: "Pocket Explorer" };
+  return { id: "demo:pocket", displayName: "Com-Munitiez Explorer" };
 }
 
 function messageFor(error: unknown) {

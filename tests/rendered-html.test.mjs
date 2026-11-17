@@ -31,7 +31,8 @@ test("ships the community experience instead of the starter preview", async () =
   assert.match(profile, /Member profile/);
   assert.match(css, /grid-auto-flow:dense/);
   assert.match(css, /@keyframes marquee/);
-  assert.match(layout, /Pocket — conviction is collective/);
+  assert.match(layout, /Com-Munitiez — conviction is collective/);
+  assert.match(page, /Com-Munitiez/);
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview/);
 });
 

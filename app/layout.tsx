@@ -13,16 +13,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pocket — conviction is collective",
+  title: "Com-Munitiez — conviction is collective",
   description: "Community-powered meme coin callouts with transparent rewards and integrity scoring.",
   openGraph: {
-    title: "Pocket — conviction is collective",
+    title: "Com-Munitiez — conviction is collective",
     description: "Community-powered callouts. Transparent rewards.",
-    images: [{ url: "/og.png", width: 1680, height: 945, alt: "Pocket — conviction is collective" }],
+    images: [{ url: "/og.png", width: 1680, height: 945, alt: "Com-Munitiez — conviction is collective" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pocket — conviction is collective",
+    title: "Com-Munitiez — conviction is collective",
     description: "Community-powered callouts. Transparent rewards.",
     images: ["/og.png"],
   },
