@@ -1,146 +1,140 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-type Community = {
-  id: string;
-  name: string;
-  mark: string;
-  motto: string;
-  score: number;
-  tier: "Diamond" | "Gold" | "Silver" | "Rookie";
-  members: number;
-  privacy: "Public" | "Private";
-  weeklyPnl: string;
-  status: string;
-  color: string;
-  leaders: string[];
-};
+gsap.registerPlugin(ScrollTrigger);
 
-const communityData: Community[] = [
-  { id: "dept", name: "Discipline Dept.", mark: "DD", motto: "Stay boring. Win loudly.", score: 96, tier: "Diamond", members: 42, privacy: "Public", weeklyPnl: "+38.2%", status: "0 integrity flags", color: "acid", leaders: ["N", "K", "A"] },
-  { id: "float", name: "Low Float Society", mark: "LF", motto: "Tiny caps, serious research.", score: 91, tier: "Gold", members: 37, privacy: "Public", weeklyPnl: "+24.8%", status: "1 watch item", color: "peach", leaders: ["L", "F", "S"] },
-  { id: "terminal", name: "Terminally Bullish", mark: "TB", motto: "The group chat is the alpha.", score: 86, tier: "Gold", members: 50, privacy: "Public", weeklyPnl: "+18.6%", status: "At capacity", color: "blue", leaders: ["T", "B", "P"] },
-  { id: "midas", name: "Midas Mode", mark: "MM", motto: "Private table. Shared upside.", score: 79, tier: "Silver", members: 26, privacy: "Private", weeklyPnl: "+11.7%", status: "Invite approval", color: "orange", leaders: ["M", "I", "D"] },
-];
+type Community = { id: string; name: string; tag: string; motto: string; privacy: "public" | "private"; memberCount: number; capacity: number; score: number; tier: "rookie" | "silver" | "gold" | "diamond"; weeklyPnl: string; integrityStatus: string; viewerRole: string | null; requested: number; calloutCount: number };
+type Challenge = { id: string; title: string; detail: string; xp: number };
+type PocketState = { viewer: { id: string; displayName: string; xp: number; referrals: number }; communities: Community[]; callouts: { id: string; ticker: string; thesis: string; createdAt: string; communityName: string; communityTag: string; authorName: string }[]; challenges: Challenge[]; completedChallengeIds: string[] };
 
-const roles = [
-  { name: "Leader", detail: "Starts calls & sets culture", unlock: "Create a community", color: "leader" },
-  { name: "Co-leader", detail: "Keeps the crew moving", unlock: "Trusted by leader", color: "coleader" },
-  { name: "Elder", detail: "Proven signal contributor", unlock: "Level 12", color: "elder" },
-  { name: "Member", detail: "Shows up & builds the group", unlock: "Join a community", color: "member" },
-];
+const levelFor = (xp: number) => Math.max(1, Math.floor(xp / 250) + 1);
+const initials = (name: string) => name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 
 export default function Home() {
-  const [tab, setTab] = useState("Discover");
-  const [filter, setFilter] = useState("All");
-  const [joined, setJoined] = useState<string[]>(["dept"]);
-  const [toast, setToast] = useState("");
+  const root = useRef<HTMLElement>(null);
+  const [state, setState] = useState<PocketState | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [createdCommunity, setCreatedCommunity] = useState<Community | null>(null);
+  const [calloutOpen, setCalloutOpen] = useState(false);
+  const [selectedCrew, setSelectedCrew] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const communities = useMemo(() => {
-    const all = createdCommunity ? [createdCommunity, ...communityData] : communityData;
-    return all.filter((community) => filter === "All" || community.privacy === filter);
-  }, [createdCommunity, filter]);
+  const load = async () => {
+    setError("");
+    const response = await fetch("/api/pocket", { cache: "no-store" });
+    const payload = await response.json() as PocketState & { error?: string };
+    if (!response.ok) throw new Error(payload.error || "Pocket could not load.");
+    setState(payload);
+  };
 
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(""), 2800);
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/pocket", { cache: "no-store" })
+      .then(async (response) => ({ response, payload: await response.json() as PocketState & { error?: string } }))
+      .then(({ response, payload }) => {
+        if (!active) return;
+        if (!response.ok) throw new Error(payload.error || "Pocket could not load.");
+        setState(payload);
+      })
+      .catch((loadError: unknown) => { if (active) setError(loadError instanceof Error ? loadError.message : "Pocket could not load."); });
+    return () => { active = false; };
+  }, []);
+
+  useGSAP(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) return;
+    const context = gsap.context(() => {
+      gsap.fromTo(".hero-copy, .hero-actions", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8, stagger: 0.12, ease: "power3.out" });
+      gsap.fromTo(".scrub-word", { opacity: 0.12 }, { opacity: 1, stagger: 0.06, scrollTrigger: { trigger: ".score-intro", start: "top 72%", end: "bottom 58%", scrub: true } });
+      const media = gsap.matchMedia();
+      media.add("(min-width: 960px)", () => {
+        ScrollTrigger.create({ trigger: ".journey-shell", start: "top 18%", end: "bottom bottom", pin: ".journey-title", pinSpacing: false });
+        gsap.utils.toArray<HTMLElement>(".journey-card").forEach((card) => {
+          gsap.fromTo(card, { scale: 0.88, opacity: 0.25 }, { scale: 1, opacity: 1, ease: "none", scrollTrigger: { trigger: card, start: "top 82%", end: "top 30%", scrub: true } });
+        });
+      });
+      return () => media.revert();
+    }, root);
+    return () => context.revert();
+  }, { scope: root, dependencies: [state] });
+
+  function announce(message: string) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 3200);
   }
 
-  function joinCommunity(community: Community) {
-    if (community.members >= 50 && !joined.includes(community.id)) {
-      showToast(`${community.name} is full. Pick another crew or request an invite.`);
-      return;
-    }
-    const isJoined = joined.includes(community.id);
-    setJoined((current) => isJoined ? current.filter((id) => id !== community.id) : [...current, community.id]);
-    showToast(isJoined ? `You left ${community.name}.` : `Welcome to ${community.name}. Your Member badge is live.`);
+  async function act(payload: Record<string, unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/pocket", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const result = await response.json() as { error?: string; message?: string; state?: PocketState };
+      if (!response.ok) throw new Error(result.error || "That action did not complete.");
+      if (result.state) setState(result.state);
+      announce(result.message || "Saved.");
+      return true;
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "That action did not complete.");
+      return false;
+    } finally { setBusy(false); }
   }
 
-  function createCommunity(event: FormEvent<HTMLFormElement>) {
+  async function createCommunity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const name = String(form.get("name") || "Your Crew").trim();
-    const privacy = String(form.get("privacy") || "Public") as "Public" | "Private";
-    const newCommunity: Community = {
-      id: `community-${Date.now()}`,
-      name,
-      mark: name.slice(0, 2).toUpperCase(),
-      motto: "Your shared edge starts here.",
-      score: 0,
-      tier: "Rookie",
-      members: 1,
-      privacy,
-      weeklyPnl: "—",
-      status: "First callout starts your score",
-      color: "acid",
-      leaders: ["Y"],
-    };
-    setCreatedCommunity(newCommunity);
-    setJoined((current) => [...current, newCommunity.id]);
-    setCreateOpen(false);
-    showToast(`${name} is live. Make your first callout to begin its score.`);
+    const done = await act({ action: "create-community", name: form.get("name"), motto: form.get("motto"), privacy: form.get("privacy") });
+    if (done) setCreateOpen(false);
   }
 
-  return (
-    <main className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="Pocket home"><span className="brand-mark"><i /><i /><i /></span><span>pocket</span></a>
-        <nav className="primary-nav" aria-label="Primary navigation">
-          {["Discover", "My crew", "Battles"].map((item) => <button key={item} className={tab === item ? "nav-active" : ""} onClick={() => setTab(item)}>{item}</button>)}
-        </nav>
-        <div className="header-actions"><button className="icon-button" aria-label="View notifications">◌<b /></button><button className="wallet-button" onClick={() => showToast("Wallet connection is ready to wire up.")}>Connect wallet <span>↗</span></button></div>
-      </header>
+  async function createCallout(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const done = await act({ action: "create-callout", communityId: form.get("communityId"), ticker: form.get("ticker"), thesis: form.get("thesis") });
+    if (done) setCalloutOpen(false);
+  }
 
-      <section className="hero" id="top">
-        <p className="eyebrow">Community-first callouts</p>
-        <h1>Find your people.<br /><em>Build your rep.</em></h1>
-        <p className="hero-copy">Pocket turns callouts into communities with something to protect: a shared score, real rewards, and a reputation everyone can see.</p>
-        <div className="hero-actions"><button className="primary-button" onClick={() => document.getElementById("communities")?.scrollIntoView({ behavior: "smooth" })}>Find a community <span>↘</span></button><button className="text-button hero-text" onClick={() => setCreateOpen(true)}>Start your own <span>→</span></button></div>
-        <div className="hero-stats"><div><strong>50</strong><span>max per crew</span></div><div><strong>4</strong><span>member ranks</span></div><div><strong>$1.8m</strong><span>shared rewards</span></div></div>
-        <div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" /><div className="orbit-node node-a" /><div className="orbit-node node-b" /><div className="orbit-node node-c" />
-        <div className="hero-badge"><span className="crest">DD</span><div><b>Discipline Dept.</b><small>Diamond community</small></div><strong>96</strong></div>
-      </section>
+  const mine = state?.communities.filter((community) => community.viewerRole) ?? [];
+  const leaderCrew = mine.find((community) => community.viewerRole === "leader") ?? mine[0];
+  const xp = state?.viewer.xp ?? 0;
+  const openCallout = (communityId = mine[0]?.id ?? "") => {
+    setSelectedCrew(communityId);
+    setCalloutOpen(true);
+  };
 
-      <section className="trust-strip" aria-label="Community principles"><span><em>01</em> Your score begins at first callout</span><span><em>02</em> Every community tops out at 50</span><span><em>03</em> Rewards follow collective action</span></section>
+  return <main className="pocket-app" ref={root}>
+    <header className="nav-shell"><a className="brand" href="#top" aria-label="Pocket home"><span className="brand-bars"><i /><i /><i /></span>pocket</a><nav aria-label="Main navigation"><a href="#crews">Crews</a><a href="#journey">Progress</a><a href="#battles">Battles</a></nav><div className="nav-actions"><button className="profile-button" onClick={() => document.getElementById("member-profile")?.scrollIntoView({ behavior: "smooth" })}>{state ? initials(state.viewer.displayName) : "--"}<span>{state?.viewer.displayName ?? "Loading"}</span></button><button className="nav-cta" onClick={() => setCreateOpen(true)}>Start a crew</button></div></header>
 
-      <section className="community-hub" id="communities">
-        <div className="section-heading community-heading"><div><p className="eyebrow">The community directory</p><h2>Pick a flag to fly.</h2></div><button className="outline-button" onClick={() => setCreateOpen(true)}>+ Start a community</button></div>
-        <div className="directory-controls"><div className="tabs" role="tablist" aria-label="Community directory"><button className="active" role="tab" aria-selected="true">For you</button><button role="tab">Highest scoring</button><button role="tab">New crews</button></div><div className="filter-row">{["All", "Public", "Private"].map((item) => <button key={item} className={filter === item ? "selected" : ""} onClick={() => setFilter(item)}>{item}</button>)}</div></div>
-        <div className="community-layout">
-          <div className="community-list">
-            {communities.map((community) => {
-              const isJoined = joined.includes(community.id);
-              const isFull = community.members >= 50;
-              return <article className="community-card" key={community.id}>
-                <div className={`community-mark ${community.color}`}>{community.mark}<span className="mark-star">✦</span></div>
-                <div className="community-summary"><div className="name-row"><h3>{community.name}</h3><span className={`tier ${community.tier.toLowerCase()}`}>{community.tier}</span><span className="privacy">{community.privacy === "Private" ? "◐ Private" : "◉ Public"}</span></div><p>{community.motto}</p><div className="micro-meta"><span>{community.members}/50 members</span><i /> <span>{community.status}</span><i /> <span className="positive">{community.weeklyPnl} this week</span></div></div>
-                <div className="community-score"><span>crew score</span><strong>{community.score || "—"}<small>{community.score ? "/100" : ""}</small></strong><div className="meter"><i style={{ width: `${community.score}%` }} /></div></div>
-                <div className="community-action"><div className="avatar-stack" aria-label="Community leaders">{community.leaders.map((leader, index) => <span key={index}>{leader}</span>)}</div><button className={isJoined ? "joined" : "join"} onClick={() => joinCommunity(community)}>{isJoined ? "Joined ✓" : isFull ? "Full" : community.privacy === "Private" ? "Request invite" : "Join crew"}</button></div>
-              </article>;
-            })}
-          </div>
+    <section className="hero" id="top"><div className="hero-copy-wrap"><p className="kicker">A reputation you build together</p><h1>Make the call.<br /><em>Keep the culture.</em></h1><p className="hero-copy">Pocket is where tight crews discover, study, and earn around calls together. Every action compounds into a score the whole community owns.</p><div className="hero-actions"><button className="primary-button" onClick={() => document.getElementById("crews")?.scrollIntoView({ behavior: "smooth" })}>Find your crew</button><button className="secondary-button" onClick={() => setCreateOpen(true)}>Build a crew</button></div></div><div className="hero-image" aria-hidden="true"><div className="image-wash" /></div></section>
 
-          <aside className="side-stack">
-            <section className="profile-card"><div className="profile-top"><span className="member-mark">VR</span><div><p className="eyebrow">Your member status</p><h2>Scout <span>Lvl 08</span></h2></div></div><p>Great crews notice the people who add signal, bring the right members, and show up for the work.</p><div className="progress-row"><span>Scout progress</span><b>680 / 1,000 XP</b></div><div className="progress"><i /></div><div className="member-stats"><span><b>06</b> calls joined</span><span><b>03</b> friends referred</span><span><b>82%</b> participation</span></div><button className="text-button full" onClick={() => showToast("Your member profile is ready to expand.")}>View member badge <span>→</span></button></section>
-            <section className="integrity-card"><div className="integrity-top"><p className="eyebrow">Integrity layer</p><span className="live-pill">● Live</span></div><h2>Culture needs receipts.</h2><p>Pocket checks callouts for bundle behavior, linked wallets, and market manipulation before score can grow.</p><div className="integrity-points"><span>✓ Wallet graph check</span><span>✓ Concentration scan</span><span>✓ Hold-time receipts</span></div><button className="text-button full" onClick={() => showToast("Integrity explanations will live on every community profile.")}>How warnings work <span>→</span></button></section>
-          </aside>
-        </div>
-      </section>
+    <div className="marquee" aria-label="Pocket activity"><div className="marquee-track"><span>Verified hold time</span><b>•</b><span>Fifty people per crew</span><b>•</b><span>Weekly prize pools</span><b>•</b><span>Public reputation</span><b>•</b><span>Verified hold time</span><b>•</b><span>Fifty people per crew</span><b>•</b><span>Weekly prize pools</span><b>•</b><span>Public reputation</span><b>•</b></div></div>
 
-      <section className="battle-section" id="battles">
-        <div className="battle-header"><div><p className="eyebrow">Pocket weekly battle · round 12</p><h2>The Sunday showdown.</h2><p>Community vs. community. Best verified PnL from active calls wins the pot and a permanent season mark.</p></div><div className="battle-clock"><span>Battle ends in</span><strong>02<span>d</span> 11<span>h</span> 24<span>m</span></strong></div></div>
-        <div className="battle-board"><div className="battle-team leading"><div className="battle-team-head"><span className="rank">01</span><span className="team-crest acid">DD</span><div><strong>Discipline Dept.</strong><p>42 members · 6 active calls</p></div><b>+38.2%</b></div><div className="battle-bar"><i /></div></div><div className="battle-team"><div className="battle-team-head"><span className="rank">02</span><span className="team-crest peach">LF</span><div><strong>Low Float Society</strong><p>37 members · 4 active calls</p></div><b>+24.8%</b></div><div className="battle-bar"><i /></div></div><div className="battle-reward"><span>this week’s community pot</span><strong>18,400 <small>PTS</small></strong><p>+ Diamond banner for the winning crew</p></div></div>
-      </section>
+    <section className="crew-section" id="crews"><div className="section-heading"><div><p className="kicker">Community directory</p><h2>Find a flag worth flying.</h2></div><div className="heading-actions"><button className="text-action" onClick={() => openCallout()} disabled={!mine.length}>Publish a callout</button><button className="outline-button" onClick={() => setCreateOpen(true)}>Start a crew</button></div></div>{error && <div className="error-banner" role="alert">{error}<button onClick={() => load().catch(() => undefined)}>Retry</button></div>}
+      {!state && !error && <div className="loading-state" role="status">Loading your Pocket...</div>}
+      {state && <div className="bento-grid">
+        <section className="bento bento-profile" id="member-profile"><div className="profile-top"><span className="member-badge">{initials(state.viewer.displayName)}</span><div><p className="kicker">Member badge</p><h3>{state.viewer.displayName}</h3></div><span className="level">Level {levelFor(xp)}</span></div><p className="profile-copy">Show up for your crew, complete challenges, and earn a reputation members can trust.</p><div className="xp-row"><span>Community XP</span><b>{xp} / {levelFor(xp) * 250} XP</b></div><div className="xp-bar"><i style={{ width: `${Math.min(100, (xp % 250) / 2.5)}%` }} /></div><div className="profile-foot"><span><b>{mine.length}</b> crews</span><span><b>{state.viewer.referrals}</b> referrals</span><span><b>{state.completedChallengeIds.length}</b> challenges</span></div></section>
+        <section className="bento bento-crew"><p className="kicker">Your active crew</p>{leaderCrew ? <><div className="crew-identity"><span className="crew-crest">{leaderCrew.tag}</span><div><h3>{leaderCrew.name}</h3><p>{leaderCrew.motto}</p></div><b className={`tier-chip ${leaderCrew.tier}`}>{leaderCrew.tier}</b></div><div className="crew-numbers"><span><b>{leaderCrew.memberCount}</b>/50 members</span><span><b>{leaderCrew.score || "Not rated"}</b>{leaderCrew.score ? "/100 score" : ""}</span><span><b>{leaderCrew.calloutCount}</b> calls</span></div><button className="dark-button" onClick={() => { setSelectedCrew(leaderCrew.id); setCalloutOpen(true); }}>Make a callout</button></> : <><h3>No crew yet.</h3><p>Join a public crew or create the culture you want to be part of.</p><button className="dark-button" onClick={() => setCreateOpen(true)}>Start a crew</button></>}</section>
+        <section className="bento bento-challenges"><div className="challenge-title"><div><p className="kicker">Build the culture</p><h3>Daily challenges</h3></div><span>{state.completedChallengeIds.length}/{state.challenges.length}</span></div><div className="challenge-list">{state.challenges.map((challenge) => { const done = state.completedChallengeIds.includes(challenge.id); return <article key={challenge.id}><div><b>{challenge.title}</b><p>{challenge.detail}</p></div><button disabled={done || busy} onClick={() => act({ action: "complete-challenge", communityId: mine[0]?.id ?? "challenge", challengeId: challenge.id })}>{done ? "Complete" : `+${challenge.xp} XP`}</button></article>; })}</div></section>
+        <section className="bento bento-integrity"><div><p className="kicker">Built-in integrity</p><h3>Culture needs receipts.</h3><p>Every score takes hold duration, call quality, community growth, and manipulation checks into account.</p></div><div className="integrity-grid"><span>Wallet graph</span><b>Active</b><span>Bundle checks</span><b>Active</b><span>Hold receipts</span><b>Active</b></div></section>
+      </div>}
+      {state && <div className="directory-list">{state.communities.map((community) => { const joined = Boolean(community.viewerRole); const full = community.memberCount >= community.capacity; const requested = Boolean(community.requested); return <article className="community-row" key={community.id}><span className="community-symbol">{community.tag}</span><div className="community-main"><div><h3>{community.name}</h3><span className={`tier-chip ${community.tier}`}>{community.tier}</span><span className="privacy-label">{community.privacy}</span></div><p>{community.motto}</p><small>{community.memberCount}/{community.capacity} members · {community.calloutCount} live callouts · {community.integrityStatus}</small></div><div className="community-score"><span>Crew score</span><strong>{community.score || "—"}</strong></div><div className="community-side"><b className={Number(community.weeklyPnl) >= 0 ? "gain" : "loss"}>{Number(community.weeklyPnl) >= 0 ? "+" : ""}{community.weeklyPnl}%</b><button className={joined ? "joined-button" : "join-button"} disabled={busy || requested || (!joined && full)} onClick={() => act({ action: joined ? "leave-community" : "join-community", communityId: community.id })}>{joined ? community.viewerRole === "leader" ? "Leader" : "Leave" : requested ? "Requested" : full ? "Full" : community.privacy === "private" ? "Request invite" : "Join crew"}</button></div></article>; })}</div>}
+    </section>
 
-      <section className="roles-section"><div><p className="eyebrow">Progress together</p><h2>Every crew has a hierarchy.<br />Every role matters.</h2></div><div className="roles-grid">{roles.map((role) => <article className="role-card" key={role.name}><span className={`role-icon ${role.color}`}>✦</span><p className="eyebrow">{role.unlock}</p><h3>{role.name}</h3><p>{role.detail}</p></article>)}</div></section>
-      <section className="method"><div><p className="eyebrow">How a crew earns its score</p><h2>Reputation is a group project.</h2></div><p>Hold time and call quality carry the most weight. Growth comes from bringing in members who stay active, finishing in-app challenges, and winning battles without tripping integrity warnings.</p><div className="score-parts"><span><b>38%</b> Hold duration</span><span><b>24%</b> Call quality</span><span><b>20%</b> Integrity</span><span><b>18%</b> Community growth</span></div></section>
-      <footer><a className="brand" href="#top"><span className="brand-mark"><i /><i /><i /></span><span>pocket</span></a><p>Better together, on chain.</p><span>© 2026 Pocket Protocol</span></footer>
+    <section className="journey-shell" id="journey"><div className="journey-title"><p className="kicker">Reputation is a group project</p><h2>How a crew<br />gets known.</h2><p>Scores are designed to reward the behavior that makes a community worth joining.</p></div><div className="journey-list"><article className="journey-card"><span>01</span><h3>Make a call</h3><p>The first verified callout starts a crew’s public score. Calls never become a solo popularity contest.</p></article><article className="journey-card"><span>02</span><h3>Hold together</h3><p>Members are rewarded for behavior over time. Short-term tails do not outrank proven conviction.</p></article><article className="journey-card"><span>03</span><h3>Grow with standards</h3><p>Bring in active members, complete challenges, and win battles without market-manipulation flags.</p></article></div></section>
 
-      {createOpen && <div className="modal-backdrop" role="presentation"><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><button className="close-button" onClick={() => setCreateOpen(false)} aria-label="Close create community form">×</button><p className="eyebrow">Start a crew</p><h2 id="create-title">Give people a flag.</h2><p>Your community begins as Rookie tier. Its score appears after the first verified callout.</p><form onSubmit={createCommunity}><label htmlFor="community-name">Community name</label><input id="community-name" name="name" required maxLength={28} placeholder="e.g. The Real Ones" /><fieldset><legend>Visibility</legend><label className="choice"><input type="radio" name="privacy" value="Public" defaultChecked /><span><b>Public</b><small>Anyone can see and join if there’s space.</small></span></label><label className="choice"><input type="radio" name="privacy" value="Private" /><span><b>Private</b><small>Members request an invite to join.</small></span></label></fieldset><button className="primary-button create-submit" type="submit">Create community <span>↗</span></button></form></section></div>}
-      {toast && <div className="toast" role="status">{toast}</div>}
-    </main>
-  );
+    <section className="score-intro"><p>{"The best communities do not chase a number. They build a culture that earns one.".split(" ").map((word, index) => <span className="scrub-word" key={`${word}-${index}`}>{word} </span>)}</p></section>
+
+    <section className="battle-section" id="battles"><div className="battle-intro"><p className="kicker">Weekly community battle</p><h2>There is a pot<br />for showing up.</h2><p>Each week, crews compete on verified call performance. The leaderboard updates with the actions that actually matter, and the winning community takes the pool.</p><button className="primary-button" onClick={() => document.getElementById("crews")?.scrollIntoView({ behavior: "smooth" })}>Join a contender</button></div><div className="battle-board">{state?.communities.slice(0, 3).map((community, index) => <article className="battle-entry" key={community.id}><span>0{index + 1}</span><b className="battle-tag">{community.tag}</b><div><h3>{community.name}</h3><p>{community.memberCount} members · {community.calloutCount} calls</p></div><strong>+{community.weeklyPnl}%</strong></article>) ?? <div className="battle-loading">Loading battle board...</div>}<div className="battle-pot"><span>This week’s shared pot</span><strong>18,400 <small>PTS</small></strong><p>Diamond banner and distribution to the top crew.</p></div></div></section>
+
+    <section className="action-section"><p className="kicker">Your table is waiting</p><h2>Start with the people<br />you would hold with.</h2><div><button className="primary-button" onClick={() => setCreateOpen(true)}>Start a community</button><button className="secondary-button light" onClick={() => document.getElementById("crews")?.scrollIntoView({ behavior: "smooth" })}>Explore crews</button></div></section>
+    <footer><a className="brand" href="#top"><span className="brand-bars"><i /><i /><i /></span>pocket</a><span>Better together, on chain.</span><span>© 2026 Pocket Protocol</span></footer>
+
+    {createOpen && <div className="modal-wrap" role="presentation"><form className="modal" onSubmit={createCommunity} aria-labelledby="create-title"><button type="button" className="close" aria-label="Close" onClick={() => setCreateOpen(false)}>Close</button><p className="kicker">Start a crew</p><h2 id="create-title">Give people a flag.</h2><p>Every community begins at Rookie tier. Publish its first callout to begin a public score.</p><label>Community name<input name="name" minLength={3} maxLength={28} required placeholder="The Real Ones" /></label><label>Culture line<input name="motto" minLength={4} maxLength={90} required placeholder="Why this crew exists" /></label><fieldset><legend>Visibility</legend><label className="radio"><input type="radio" name="privacy" value="public" defaultChecked />Public <small>Anyone can join while there is room.</small></label><label className="radio"><input type="radio" name="privacy" value="private" />Private <small>Members request an invite to join.</small></label></fieldset><button className="primary-button" type="submit" disabled={busy}>{busy ? "Creating..." : "Create community"}</button></form></div>}
+    {calloutOpen && <div className="modal-wrap" role="presentation"><form className="modal" onSubmit={createCallout} aria-labelledby="callout-title"><button type="button" className="close" aria-label="Close" onClick={() => setCalloutOpen(false)}>Close</button><p className="kicker">Crew callout</p><h2 id="callout-title">Put it on the record.</h2><p>Callouts are community actions. They affect the crew’s score only after integrity and hold-time checks.</p><label>Community<select name="communityId" value={selectedCrew || mine[0]?.id || ""} onChange={(event) => setSelectedCrew(event.target.value)} required>{mine.map((community) => <option value={community.id} key={community.id}>{community.name}</option>)}</select></label><label>Ticker<input name="ticker" minLength={2} maxLength={12} required placeholder="MOGU" /></label><label>Thesis<textarea name="thesis" minLength={12} maxLength={280} required placeholder="What is the signal, and why is this worth the crew's attention?" /></label><button className="primary-button" type="submit" disabled={busy || !mine.length}>{busy ? "Publishing..." : "Publish callout"}</button></form></div>}
+    {notice && <div className="notice" role="status">{notice}</div>}
+  </main>;
 }
