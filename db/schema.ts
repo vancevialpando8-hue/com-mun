@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const profiles = sqliteTable("profiles", {
   id: text("id").primaryKey(),
@@ -35,7 +35,7 @@ export const memberships = sqliteTable("memberships", {
   userId: text("user_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
   role: text("role", { enum: ["leader", "co_leader", "elder", "new_member"] }).notNull().default("new_member"),
   joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [primaryKey({ columns: [table.communityId, table.userId] })]);
+}, (table) => [primaryKey({ columns: [table.communityId, table.userId] }), uniqueIndex("memberships_user_id_unique").on(table.userId)]);
 
 export const joinRequests = sqliteTable("join_requests", {
   id: text("id").primaryKey(),

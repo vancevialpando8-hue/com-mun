@@ -42,6 +42,11 @@ async function ensurePocketSchema() {
     await addColumnIfMissing("ALTER TABLE profiles ADD COLUMN member_status TEXT NOT NULL DEFAULT 'Scout'");
     await addColumnIfMissing("ALTER TABLE communities ADD COLUMN icon_key TEXT");
     await db.prepare("UPDATE communities SET tier = 'bronze' WHERE tier = 'rookie'").run();
+    await db.batch([
+      db.prepare("DELETE FROM memberships WHERE rowid NOT IN (SELECT rowid FROM memberships m WHERE rowid = (SELECT rowid FROM memberships candidate WHERE candidate.user_id = m.user_id ORDER BY CASE candidate.role WHEN 'leader' THEN 0 ELSE 1 END, candidate.joined_at ASC LIMIT 1))"),
+      db.prepare("UPDATE communities SET member_count = (SELECT COUNT(*) FROM memberships WHERE community_id = communities.id)"),
+      db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS memberships_user_id_unique ON memberships(user_id)"),
+    ]);
 
     const existing = await db.prepare("SELECT COUNT(*) as count FROM communities").first<{ count: number }>();
     if ((existing?.count ?? 0) === 0) {
@@ -121,6 +126,8 @@ function mediaKey(value: unknown, prefix: "avatar" | "community") {
 export async function runPocketAction(viewer: Viewer, payload: Record<string, unknown>) {
   await ensurePocketSchema(); await ensureViewer(viewer); const db = getD1(); const action = payload.action;
   if (action === "create-community") {
+    const existingMembership = await db.prepare("SELECT c.name FROM memberships m JOIN communities c ON c.id = m.community_id WHERE m.user_id = ? LIMIT 1").bind(viewer.id).first<{ name: string }>();
+    if (existingMembership) throw new Error(`Leave ${existingMembership.name} before creating a new crew.`);
     const name = requireText(payload.name, "Community name", 3, 28); const motto = requireText(payload.motto ?? "Your shared edge starts here.", "Culture line", 4, 90); const privacy = payload.privacy === "private" ? "private" : "public"; const iconKey = mediaKey(payload.iconKey, "community"); const id = crypto.randomUUID();
     await db.batch([db.prepare("INSERT INTO communities (id, name, tag, motto, privacy, owner_id, member_count, score, tier, icon_key, weekly_pnl, integrity_status) VALUES (?, ?, ?, ?, ?, ?, 1, 0, 'bronze', ?, '0.0', 'First callout starts your score')").bind(id, name, tagFor(name), motto, privacy, viewer.id, iconKey), db.prepare("INSERT INTO memberships (community_id, user_id, role) VALUES (?, ?, 'leader')").bind(id, viewer.id)]);
     return { message: `${name} is live. Publish its first callout to begin its score.` };
@@ -163,6 +170,8 @@ export async function runPocketAction(viewer: Viewer, payload: Record<string, un
   if (!community) throw new Error("That community is no longer available.");
   if (action === "join-community") {
     const member = await db.prepare("SELECT role FROM memberships WHERE community_id = ? AND user_id = ?").bind(communityId, viewer.id).first(); if (member) return { message: `You are already part of ${community.name}.` };
+    const existingMembership = await db.prepare("SELECT c.name FROM memberships m JOIN communities c ON c.id = m.community_id WHERE m.user_id = ? LIMIT 1").bind(viewer.id).first<{ name: string }>();
+    if (existingMembership) throw new Error(`You are already in ${existingMembership.name}. Leave that crew before joining another one.`);
     if (community.privacy === "private") { await db.prepare("INSERT OR IGNORE INTO join_requests (id, community_id, user_id) VALUES (?, ?, ?)").bind(crypto.randomUUID(), communityId, viewer.id).run(); return { message: `Your request is waiting for ${community.name}.` }; }
     const update = await db.prepare("UPDATE communities SET member_count = member_count + 1 WHERE id = ? AND member_count < capacity").bind(communityId).run(); if (!update.meta.changes) throw new Error(`${community.name} is at capacity.`);
     await db.prepare("INSERT INTO memberships (community_id, user_id, role) VALUES (?, ?, 'new_member')").bind(communityId, viewer.id).run(); return { message: `You joined ${community.name}. Your New Member badge is live.` };

@@ -53,6 +53,8 @@ test("persists the core Pocket workflows in D1", async () => {
   assert.match(api, /getBattleState/);
   assert.match(store, /join-community/);
   assert.match(store, /leave-community/);
+  assert.match(store, /Leave that crew before joining another one/);
+  assert.match(store, /before creating a new crew/);
   assert.match(store, /join_requests/);
   assert.match(store, /member_count < capacity/);
   assert.match(store, /send-message/);
@@ -62,6 +64,7 @@ test("persists the core Pocket workflows in D1", async () => {
   assert.match(schema, /export const battles/);
   assert.match(schema, /export const communities/);
   assert.match(schema, /export const memberships/);
+  assert.match(schema, /memberships_user_id_unique/);
   assert.match(schema, /export const communityMessages/);
   assert.match(hosting, /"d1": "DB"/);
 });
