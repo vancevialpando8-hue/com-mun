@@ -8,6 +8,7 @@ export const profiles = sqliteTable("profiles", {
   referrals: integer("referrals").notNull().default(0),
   walletAddress: text("wallet_address"),
   walletPnl: text("wallet_pnl").notNull().default("0.0"),
+  avatarKey: text("avatar_key"),
   memberStatus: text("member_status").notNull().default("Scout"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -22,7 +23,8 @@ export const communities = sqliteTable("communities", {
   memberCount: integer("member_count").notNull().default(1),
   capacity: integer("capacity").notNull().default(50),
   score: integer("score").notNull().default(0),
-  tier: text("tier", { enum: ["rookie", "silver", "gold", "diamond"] }).notNull().default("rookie"),
+  tier: text("tier", { enum: ["bronze", "silver", "gold", "diamond"] }).notNull().default("bronze"),
+  iconKey: text("icon_key"),
   weeklyPnl: text("weekly_pnl").notNull().default("0.0"),
   integrityStatus: text("integrity_status").notNull().default("0 integrity flags"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),

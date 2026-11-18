@@ -29,6 +29,13 @@
       "when": 1794949667021,
       "tag": "0003_lush_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794969722881,
+      "tag": "0004_sad_earthquake",
+      "breakpoints": true
     }
   ]
 }

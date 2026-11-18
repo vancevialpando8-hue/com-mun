@@ -5,7 +5,7 @@ export type Viewer = { id: string; displayName: string };
 type CommunityStateRow = {
   id: string; name: string; tag: string; motto: string; privacy: string; memberCount: number;
   capacity: number; score: number; tier: string; weeklyPnl: string; integrityStatus: string;
-  viewerRole: string | null; requested: number; calloutCount: number;
+  viewerRole: string | null; requested: number; calloutCount: number; iconKey: string | null;
 };
 
 const challenges = [
@@ -27,8 +27,8 @@ async function ensurePocketSchema() {
   initialization = (async () => {
     const db = getD1();
     await db.batch([
-      db.prepare("CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, xp INTEGER NOT NULL DEFAULT 240, referrals INTEGER NOT NULL DEFAULT 0, wallet_address TEXT, wallet_pnl TEXT NOT NULL DEFAULT '0.0', member_status TEXT NOT NULL DEFAULT 'Scout', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-      db.prepare("CREATE TABLE IF NOT EXISTS communities (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, tag TEXT NOT NULL, motto TEXT NOT NULL, privacy TEXT NOT NULL, owner_id TEXT NOT NULL, member_count INTEGER NOT NULL DEFAULT 1, capacity INTEGER NOT NULL DEFAULT 50, score INTEGER NOT NULL DEFAULT 0, tier TEXT NOT NULL DEFAULT 'rookie', weekly_pnl TEXT NOT NULL DEFAULT '0.0', integrity_status TEXT NOT NULL DEFAULT '0 integrity flags', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+      db.prepare("CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, xp INTEGER NOT NULL DEFAULT 240, referrals INTEGER NOT NULL DEFAULT 0, wallet_address TEXT, wallet_pnl TEXT NOT NULL DEFAULT '0.0', avatar_key TEXT, member_status TEXT NOT NULL DEFAULT 'Scout', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+      db.prepare("CREATE TABLE IF NOT EXISTS communities (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, tag TEXT NOT NULL, motto TEXT NOT NULL, privacy TEXT NOT NULL, owner_id TEXT NOT NULL, member_count INTEGER NOT NULL DEFAULT 1, capacity INTEGER NOT NULL DEFAULT 50, score INTEGER NOT NULL DEFAULT 0, tier TEXT NOT NULL DEFAULT 'bronze', icon_key TEXT, weekly_pnl TEXT NOT NULL DEFAULT '0.0', integrity_status TEXT NOT NULL DEFAULT '0 integrity flags', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
       db.prepare("CREATE TABLE IF NOT EXISTS memberships (community_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'new_member', joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (community_id, user_id))"),
       db.prepare("CREATE TABLE IF NOT EXISTS join_requests (id TEXT PRIMARY KEY, community_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE (community_id, user_id))"),
       db.prepare("CREATE TABLE IF NOT EXISTS callouts (id TEXT PRIMARY KEY, community_id TEXT NOT NULL, author_id TEXT NOT NULL, ticker TEXT NOT NULL, thesis TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
@@ -38,7 +38,10 @@ async function ensurePocketSchema() {
     ]);
     await addColumnIfMissing("ALTER TABLE profiles ADD COLUMN wallet_address TEXT");
     await addColumnIfMissing("ALTER TABLE profiles ADD COLUMN wallet_pnl TEXT NOT NULL DEFAULT '0.0'");
+    await addColumnIfMissing("ALTER TABLE profiles ADD COLUMN avatar_key TEXT");
     await addColumnIfMissing("ALTER TABLE profiles ADD COLUMN member_status TEXT NOT NULL DEFAULT 'Scout'");
+    await addColumnIfMissing("ALTER TABLE communities ADD COLUMN icon_key TEXT");
+    await db.prepare("UPDATE communities SET tier = 'bronze' WHERE tier = 'rookie'").run();
 
     const existing = await db.prepare("SELECT COUNT(*) as count FROM communities").first<{ count: number }>();
     if ((existing?.count ?? 0) === 0) {
@@ -75,7 +78,7 @@ export async function getPocketState(viewer: Viewer) {
   const db = getD1();
   const [profile, communityResult, calloutResult, personalCalloutResult, completionResult] = await Promise.all([
     db.prepare("SELECT id, display_name as displayName, xp, referrals, wallet_address as walletAddress, wallet_pnl as walletPnl, member_status as memberStatus FROM profiles WHERE id = ?").bind(viewer.id).first(),
-    db.prepare(`SELECT c.id, c.name, c.tag, c.motto, c.privacy, c.member_count as memberCount, c.capacity, c.score, c.tier, c.weekly_pnl as weeklyPnl, c.integrity_status as integrityStatus, m.role as viewerRole, EXISTS(SELECT 1 FROM join_requests r WHERE r.community_id = c.id AND r.user_id = ?) as requested, (SELECT COUNT(*) FROM callouts co WHERE co.community_id = c.id) as calloutCount FROM communities c LEFT JOIN memberships m ON m.community_id = c.id AND m.user_id = ? ORDER BY c.score DESC, c.created_at DESC`).bind(viewer.id, viewer.id).all<CommunityStateRow>(),
+    db.prepare(`SELECT c.id, c.name, c.tag, c.motto, c.privacy, c.member_count as memberCount, c.capacity, c.score, c.tier, c.icon_key as iconKey, c.weekly_pnl as weeklyPnl, c.integrity_status as integrityStatus, m.role as viewerRole, EXISTS(SELECT 1 FROM join_requests r WHERE r.community_id = c.id AND r.user_id = ?) as requested, (SELECT COUNT(*) FROM callouts co WHERE co.community_id = c.id) as calloutCount FROM communities c LEFT JOIN memberships m ON m.community_id = c.id AND m.user_id = ? ORDER BY c.score DESC, c.created_at DESC`).bind(viewer.id, viewer.id).all<CommunityStateRow>(),
     db.prepare("SELECT co.id, co.ticker, co.thesis, co.created_at as createdAt, c.name as communityName, c.tag as communityTag, p.display_name as authorName FROM callouts co JOIN communities c ON c.id = co.community_id JOIN profiles p ON p.id = co.author_id ORDER BY co.created_at DESC LIMIT 8").all(),
     db.prepare("SELECT co.id, co.ticker, co.thesis, co.created_at as createdAt, c.name as communityName, p.display_name as authorName FROM callouts co JOIN communities c ON c.id = co.community_id JOIN profiles p ON p.id = co.author_id WHERE co.author_id = ? ORDER BY co.created_at DESC LIMIT 12").bind(viewer.id).all(),
     db.prepare("SELECT challenge_id as id FROM challenge_completions WHERE user_id = ?").bind(viewer.id).all<{ id: string }>(),
@@ -110,12 +113,16 @@ function requireText(value: unknown, field: string, min: number, max: number) {
   return result;
 }
 function tagFor(name: string) { return name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase().padEnd(2, "P"); }
+function mediaKey(value: unknown, prefix: "avatar" | "community") {
+  const key = typeof value === "string" ? value : "";
+  return key.startsWith(`${prefix}/`) && key.length <= 180 ? key : null;
+}
 
 export async function runPocketAction(viewer: Viewer, payload: Record<string, unknown>) {
   await ensurePocketSchema(); await ensureViewer(viewer); const db = getD1(); const action = payload.action;
   if (action === "create-community") {
-    const name = requireText(payload.name, "Community name", 3, 28); const motto = requireText(payload.motto ?? "Your shared edge starts here.", "Culture line", 4, 90); const privacy = payload.privacy === "private" ? "private" : "public"; const id = crypto.randomUUID();
-    await db.batch([db.prepare("INSERT INTO communities (id, name, tag, motto, privacy, owner_id, member_count, score, tier, weekly_pnl, integrity_status) VALUES (?, ?, ?, ?, ?, ?, 1, 0, 'rookie', '0.0', 'First callout starts your score')").bind(id, name, tagFor(name), motto, privacy, viewer.id), db.prepare("INSERT INTO memberships (community_id, user_id, role) VALUES (?, ?, 'leader')").bind(id, viewer.id)]);
+    const name = requireText(payload.name, "Community name", 3, 28); const motto = requireText(payload.motto ?? "Your shared edge starts here.", "Culture line", 4, 90); const privacy = payload.privacy === "private" ? "private" : "public"; const iconKey = mediaKey(payload.iconKey, "community"); const id = crypto.randomUUID();
+    await db.batch([db.prepare("INSERT INTO communities (id, name, tag, motto, privacy, owner_id, member_count, score, tier, icon_key, weekly_pnl, integrity_status) VALUES (?, ?, ?, ?, ?, ?, 1, 0, 'bronze', ?, '0.0', 'First callout starts your score')").bind(id, name, tagFor(name), motto, privacy, viewer.id, iconKey), db.prepare("INSERT INTO memberships (community_id, user_id, role) VALUES (?, ?, 'leader')").bind(id, viewer.id)]);
     return { message: `${name} is live. Publish its first callout to begin its score.` };
   }
   if (action === "complete-challenge") {
@@ -127,6 +134,12 @@ export async function runPocketAction(viewer: Viewer, payload: Record<string, un
     const walletAddress = requireText(payload.walletAddress, "Wallet address", 4, 120);
     await db.prepare("UPDATE profiles SET wallet_address = ? WHERE id = ?").bind(walletAddress, viewer.id).run();
     return { message: "Wallet address saved. Live wallet PnL needs a connected chain data source." };
+  }
+  if (action === "save-avatar") {
+    const avatarKey = mediaKey(payload.avatarKey, "avatar");
+    if (!avatarKey) throw new Error("Choose an image before saving your avatar.");
+    await db.prepare("UPDATE profiles SET avatar_key = ? WHERE id = ?").bind(avatarKey, viewer.id).run();
+    return { message: "Profile photo saved." };
   }
   if (action === "start-battle") {
     const challengerCommunityId = requireText(payload.challengerCommunityId, "Your community", 1, 100);
@@ -161,7 +174,7 @@ export async function runPocketAction(viewer: Viewer, payload: Record<string, un
   if (action === "create-callout") {
     const membership = await db.prepare("SELECT role FROM memberships WHERE community_id = ? AND user_id = ?").bind(communityId, viewer.id).first(); if (!membership) throw new Error("Join the community before posting a callout.");
     const ticker = requireText(payload.ticker, "Ticker", 2, 12).replace(/^\$/, "").toUpperCase(); if (!/^[A-Z0-9]+$/.test(ticker)) throw new Error("Ticker can only use letters and numbers."); const thesis = requireText(payload.thesis, "Callout", 12, 280);
-    await db.batch([db.prepare("INSERT INTO callouts (id, community_id, author_id, ticker, thesis) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), communityId, viewer.id, `$${ticker}`, thesis), db.prepare("UPDATE communities SET score = CASE WHEN score = 0 THEN 62 ELSE MIN(score + 1, 99) END, tier = CASE WHEN score = 0 THEN 'rookie' ELSE tier END, integrity_status = CASE WHEN score = 0 THEN '0 integrity flags' ELSE integrity_status END WHERE id = ?").bind(communityId)]); return { message: `$${ticker} is live. The community score has been updated.` };
+    await db.batch([db.prepare("INSERT INTO callouts (id, community_id, author_id, ticker, thesis) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), communityId, viewer.id, `$${ticker}`, thesis), db.prepare("UPDATE communities SET score = CASE WHEN score = 0 THEN 62 ELSE MIN(score + 1, 99) END, tier = CASE WHEN score = 0 THEN 'bronze' ELSE tier END, integrity_status = CASE WHEN score = 0 THEN '0 integrity flags' ELSE integrity_status END WHERE id = ?").bind(communityId)]); return { message: `$${ticker} is live. The community score has been updated.` };
   }
   if (action === "send-message") {
     const membership = await db.prepare("SELECT role FROM memberships WHERE community_id = ? AND user_id = ?").bind(communityId, viewer.id).first(); if (!membership) throw new Error("Join the community before posting in the room.");
