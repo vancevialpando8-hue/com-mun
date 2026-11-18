@@ -29,6 +29,7 @@ export default function Home() {
   const [calloutOpen, setCalloutOpen] = useState(false);
   const [selectedCrew, setSelectedCrew] = useState("");
   const [busy, setBusy] = useState(false);
+  const [arenaOpen, setArenaOpen] = useState(false);
 
   const load = async () => {
     setError("");
@@ -127,10 +128,34 @@ export default function Home() {
     setCalloutOpen(true);
   };
 
+  if (!arenaOpen) return <main className="launch-page" ref={root}>
+    <header className="launch-nav"><a className="brand" href="#top" aria-label="Com-Munitiez home"><BrandLockup /></a><div className="launch-nav-links"><a href="#how-it-works">How it works</a><a href="#season">Season 01</a><button className="launch-login" onClick={() => setArenaOpen(true)}>Log in</button></div></header>
+    <section className="launch-hero" id="top">
+      <div className="launch-copy">
+        <p className="season-chip"><span /> Season 01 · Crews are forming</p>
+        <h1>Find your people.<br /><em>Run the board.</em></h1>
+        <p>Com-Munitiez turns meme coin conviction into a team sport. Build a crew, make calls together, stack reputation, and take the weekly pot.</p>
+        <div className="launch-actions"><button className="launch-primary" onClick={() => setArenaOpen(true)}>Enter the arena <span>↗</span></button><button className="launch-text" onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}>See how crews win</button></div>
+        <div className="launch-proof"><span><b>50</b> max members</span><span><b>100</b> point crew score</span><span><b>0</b> solo winners</span></div>
+      </div>
+      <div className="launch-board" aria-label="Current season standings">
+        <div className="board-topline"><span>Live season board</span><b>Week 03 / 12</b></div>
+        <div className="board-score"><span>Prize pool</span><strong>18,400 <small>PTS</small></strong><p>Rewarded to the entire winning crew.</p></div>
+        <div className="launch-rankings"><article><i>01</i><b>BRK</b><div><strong>Breakout Club</strong><span>+47.2% weekly PNL</span></div><em>94</em></article><article><i>02</i><b>FROG</b><div><strong>Frog Assembly</strong><span>+38.8% weekly PNL</span></div><em>89</em></article><article><i>03</i><b>ARC</b><div><strong>Arcade Holdings</strong><span>+31.4% weekly PNL</span></div><em>84</em></article></div>
+        <div className="board-footer"><span>Integrity checks live</span><span>•</span><span>156 active crews</span></div>
+      </div>
+      <div className="launch-sticker sticker-one">NO SOLO<br />FARMING</div><div className="launch-sticker sticker-two">HOLD<br />TO WIN</div>
+    </section>
+    <section className="launch-ticker"><div><span>CALLS ARE TEAM SPORTS</span><b>✦</b><span>BUILD A FLAG</span><b>✦</b><span>OWN YOUR REPUTATION</span><b>✦</b><span>CALLS ARE TEAM SPORTS</span><b>✦</b><span>BUILD A FLAG</span><b>✦</b><span>OWN YOUR REPUTATION</span></div></section>
+    <section className="launch-rules" id="how-it-works"><p className="kicker">The crew loop</p><h2>One call is noise.<br />A crew is a signal.</h2><div><article><span>01</span><h3>Fly a flag</h3><p>Join a public crew or build a culture of your own. Every crew gets 50 seats.</p></article><article><span>02</span><h3>Earn receipts</h3><p>Hold time, call quality, integrity, and growth form the score everyone shares.</p></article><article><span>03</span><h3>Take the week</h3><p>Compete in weekly battles. Higher PNL and healthier behavior win the pool.</p></article></div></section>
+    <section className="launch-bottom" id="season"><p className="kicker">Season 01 is live</p><h2>Your crew name should mean something.</h2><button className="launch-primary" onClick={() => setArenaOpen(true)}>Choose your side <span>↗</span></button></section>
+  </main>;
+
   return <main className="pocket-app" ref={root}>
     <header className="nav-shell"><a className="brand" href="#top" aria-label="Com-Munitiez home"><BrandLockup /></a><nav aria-label="Main navigation"><a href="#crews">Crews</a><a href="#journey">Progress</a><Link href="/battles">Battles</Link></nav><div className="nav-actions"><Link className="profile-button" href="/profile">{state?.viewer.avatarKey ? <img className="nav-avatar" src={mediaUrl(state.viewer.avatarKey)} alt="" /> : state ? initials(state.viewer.displayName) : "--"}<span>{state?.viewer.displayName ?? "Loading"}</span></Link><button className="nav-cta" onClick={() => setCreateOpen(true)}>Start a crew</button></div></header>
+    <section className="arena-hud" aria-label="Your current season status"><div className="hud-season"><span className="live-dot" /> <b>Season 01</b><small>Week 03 · 4d 08h left</small></div><div className="hud-stats"><span><small>Your level</small><b>{state ? levelFor(xp) : "—"}</b></span><span><small>Crew rank</small><b>{leaderCrew ? "#18" : "—"}</b></span><span><small>XP today</small><b>+{state ? Math.min(45, 12 + state.completedChallengeIds.length * 8) : "—"}</b></span></div><button className="hud-action" onClick={() => openCallout()} disabled={!mine.length}>+ Drop a call</button></section>
 
-    <section className="hero" id="top"><div className="hero-copy-wrap"><p className="kicker">A reputation you build together</p><h1>Make the call.<br /><em>Keep the culture.</em></h1><p className="hero-copy">Com-Munitiez is where tight crews discover, study, and earn around calls together. Every action compounds into a score the whole community owns.</p><div className="hero-actions"><button className="primary-button" onClick={() => document.getElementById("crews")?.scrollIntoView({ behavior: "smooth" })}>Find your crew</button><button className="secondary-button" onClick={() => setCreateOpen(true)}>Build a crew</button></div></div><div className="hero-signal"><Image src="/brand/com-munitiez-banner-logo.png" alt="Com-Munitiez banner mark" fill priority sizes="(max-width: 900px) 88vw, 40vw" /></div></section>
+    <section className="hero" id="top"><div className="hero-copy-wrap"><p className="kicker">Your season starts here</p><h1>{state ? <>Welcome back,<br /><em>{state.viewer.displayName.split(" ")[0]}.</em></> : <>Make the call.<br /><em>Keep the culture.</em></>}</h1><p className="hero-copy">{leaderCrew ? <>Your crew is on the board. Feed its score with calls that hold, members who show up, and a culture people want to rep.</> : <>Pick a side or fly your own flag. Every move from here adds to the reputation the whole community owns.</>}</p><div className="hero-actions"><button className="primary-button" onClick={() => document.getElementById("crews")?.scrollIntoView({ behavior: "smooth" })}>{leaderCrew ? "See crew board" : "Find your crew"}</button><button className="secondary-button" onClick={() => setCreateOpen(true)}>Build a crew</button></div></div><div className="hero-signal"><Image src="/brand/com-munitiez-banner-logo.png" alt="Com-Munitiez banner mark" fill priority sizes="(max-width: 900px) 88vw, 40vw" /><div className="signal-stamp"><span>Next payout</span><b>04D 08H</b><small>Top crews split the pot</small></div></div></section>
 
     <div className="marquee" aria-label="Com-Munitiez activity"><div className="marquee-track"><span>Verified hold time</span><b>•</b><span>Fifty people per crew</span><b>•</b><span>Weekly prize pools</span><b>•</b><span>Public reputation</span><b>•</b><span>Verified hold time</span><b>•</b><span>Fifty people per crew</span><b>•</b><span>Weekly prize pools</span><b>•</b><span>Public reputation</span><b>•</b></div></div>
 
