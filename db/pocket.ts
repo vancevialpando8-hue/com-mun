@@ -77,13 +77,13 @@ export async function getPocketState(viewer: Viewer) {
   await ensurePocketSchema(); await ensureViewer(viewer);
   const db = getD1();
   const [profile, communityResult, calloutResult, personalCalloutResult, completionResult] = await Promise.all([
-    db.prepare("SELECT id, display_name as displayName, xp, referrals, wallet_address as walletAddress, wallet_pnl as walletPnl, member_status as memberStatus FROM profiles WHERE id = ?").bind(viewer.id).first(),
+    db.prepare("SELECT id, display_name as displayName, xp, referrals, wallet_address as walletAddress, wallet_pnl as walletPnl, avatar_key as avatarKey, member_status as memberStatus FROM profiles WHERE id = ?").bind(viewer.id).first(),
     db.prepare(`SELECT c.id, c.name, c.tag, c.motto, c.privacy, c.member_count as memberCount, c.capacity, c.score, c.tier, c.icon_key as iconKey, c.weekly_pnl as weeklyPnl, c.integrity_status as integrityStatus, m.role as viewerRole, EXISTS(SELECT 1 FROM join_requests r WHERE r.community_id = c.id AND r.user_id = ?) as requested, (SELECT COUNT(*) FROM callouts co WHERE co.community_id = c.id) as calloutCount FROM communities c LEFT JOIN memberships m ON m.community_id = c.id AND m.user_id = ? ORDER BY c.score DESC, c.created_at DESC`).bind(viewer.id, viewer.id).all<CommunityStateRow>(),
     db.prepare("SELECT co.id, co.ticker, co.thesis, co.created_at as createdAt, c.name as communityName, c.tag as communityTag, p.display_name as authorName FROM callouts co JOIN communities c ON c.id = co.community_id JOIN profiles p ON p.id = co.author_id ORDER BY co.created_at DESC LIMIT 8").all(),
     db.prepare("SELECT co.id, co.ticker, co.thesis, co.created_at as createdAt, c.name as communityName, p.display_name as authorName FROM callouts co JOIN communities c ON c.id = co.community_id JOIN profiles p ON p.id = co.author_id WHERE co.author_id = ? ORDER BY co.created_at DESC LIMIT 12").bind(viewer.id).all(),
     db.prepare("SELECT challenge_id as id FROM challenge_completions WHERE user_id = ?").bind(viewer.id).all<{ id: string }>(),
   ]);
-  return { viewer: profile ?? { id: viewer.id, displayName: viewer.displayName, xp: 240, referrals: 0, walletAddress: null, walletPnl: "0.0", memberStatus: "Scout" }, communities: communityResult.results, callouts: calloutResult.results, personalCallouts: personalCalloutResult.results, challenges, completedChallengeIds: completionResult.results.map((row) => row.id) };
+  return { viewer: profile ?? { id: viewer.id, displayName: viewer.displayName, xp: 240, referrals: 0, walletAddress: null, walletPnl: "0.0", avatarKey: null, memberStatus: "Scout" }, communities: communityResult.results, callouts: calloutResult.results, personalCallouts: personalCalloutResult.results, challenges, completedChallengeIds: completionResult.results.map((row) => row.id) };
 }
 
 export async function getCommunityDetail(viewer: Viewer, communityId: string) {

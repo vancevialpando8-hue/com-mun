@@ -20,3 +20,11 @@ export function getD1() {
   }
   return binding;
 }
+
+export function getR2() {
+  const binding = (env as unknown as { ASSETS?: R2Bucket }).ASSETS;
+  if (!binding) {
+    throw new Error("Image storage is unavailable right now.");
+  }
+  return binding;
+}
