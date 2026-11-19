@@ -51,7 +51,7 @@ export default function BattlesPage() {
   if (!data) return <main className="detail-page"><Link className="back-link" href="/">← Com-Munitiez</Link><div className="empty-panel"><h1>Battle board unavailable.</h1><p>{error}</p><button onClick={() => void load().catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Could not reload."))}>Try again</button></div></main>;
 
   return <main className="detail-page battles-page">
-    <header className="detail-nav"><Link className="brand" href="/"><BrandLockup /></Link><nav><Link href="/">All communities</Link><Link href="/profile">My profile</Link></nav></header>
+    <header className="detail-nav"><Link className="brand" href="/"><BrandLockup /></Link><nav><Link href="/communities">Explore crews</Link><Link href="/profile">My profile</Link></nav></header>
     <section className="battle-page-hero"><div><Link className="back-link" href="/">← Community directory</Link><p className="kicker">Weekly community arena</p><h1>Win the week.<br /><em>Bring your whole crew.</em></h1><p>Battle boards rank communities on collective weekly PnL. Leaders can start a seven-day faceoff, then rally their members around one shared result.</p></div><div className="battle-seal"><span>LIVE</span><b>VS</b><i>collective<br />conviction</i></div></section>
     {error && <div className="error-banner room-error" role="alert">{error}</div>}
     <section className="battle-page-grid">

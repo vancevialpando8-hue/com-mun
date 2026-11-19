@@ -9,11 +9,12 @@ async function source(path) {
 }
 
 test("ships the community experience instead of the starter preview", async () => {
-  const [page, room, profile, battles, css, layout] = await Promise.all([
+  const [page, room, profile, battles, communities, css, layout] = await Promise.all([
     source("app/page.tsx"),
     source("app/community/[id]/page.tsx"),
     source("app/profile/page.tsx"),
     source("app/battles/page.tsx"),
+    source("app/communities/page.tsx"),
     source("app/globals.css"),
     source("app/layout.tsx"),
   ]);
@@ -28,10 +29,12 @@ test("ships the community experience instead of the starter preview", async () =
   assert.match(room, /Community talk/);
   assert.match(room, /Active callouts/);
   assert.match(room, /Member roster/);
-  assert.match(profile, /Wallet view/);
   assert.match(profile, /Member profile/);
+  assert.match(profile, /profile-photo-form/);
   assert.match(battles, /Leaderboard/);
   assert.match(battles, /Start 7-day battle/);
+  assert.match(communities, /Pick one flag/);
+  assert.match(communities, /join-community/);
   assert.match(css, /grid-auto-flow:dense/);
   assert.match(css, /@keyframes marquee/);
   assert.match(layout, /Com-Munitiez — conviction is collective/);
