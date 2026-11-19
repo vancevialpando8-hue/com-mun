@@ -6,7 +6,13 @@ import { sites } from "./build/sites-vite-plugin";
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
-const { d1, r2 } = hostingConfig;
+// ChatGPT Sites declares optional D1/R2 bindings in hosting.json. They are
+// only needed for the legacy Sites fallback; the standalone Cloudflare Worker
+// uses Supabase instead. Keep those bindings opt-in so a fresh Cloudflare
+// account does not fail deployment just because R2 has not been enabled.
+const { d1, r2 } = process.env.ENABLE_SITES_BINDINGS === "true"
+  ? hostingConfig
+  : { d1: undefined, r2: undefined };
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
