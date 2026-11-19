@@ -43,6 +43,18 @@ function assertOk(error: { message?: string } | null, fallback: string) {
   if (error) throw new Error(error.message || fallback);
 }
 
+export function normalizePublicWalletAddress(value: unknown) {
+  const address = typeof value === "string" ? value.trim() : "";
+  const isEvm = /^0x[a-fA-F0-9]{40}$/.test(address);
+  const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+  if (!isEvm && !isSolana) throw new Error("Enter a valid public wallet address (EVM 0x… or Solana base58).");
+  return isEvm ? address.toLowerCase() : address;
+}
+
+function walletDisplayName(address: string) {
+  return `Wallet ${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
 async function ensureSchemaSeeded(client: SupabaseClient) {
   const { count, error } = await client.from("communities").select("id", { count: "exact", head: true });
   assertOk(error, "Supabase communities table is unavailable.");
@@ -77,6 +89,10 @@ async function ensureSchemaSeeded(client: SupabaseClient) {
 async function ensureViewer(client: SupabaseClient, viewer: Viewer) {
   const { error } = await client.from("profiles").upsert({ id: viewer.id, display_name: viewer.displayName }, { onConflict: "id" });
   assertOk(error, "Unable to save your profile.");
+  const profile = await client.from("profiles").select("wallet_address").eq("id", viewer.id).maybeSingle();
+  assertOk(profile.error, "Unable to load your profile.");
+  const active = await client.from("active_users").upsert({ id: viewer.id, wallet_address: profile.data?.wallet_address ?? null, display_name: viewer.displayName, last_seen_at: new Date().toISOString() }, { onConflict: "id" });
+  assertOk(active.error, "Unable to track your active account.");
   await ensureSchemaSeeded(client);
 }
 
@@ -91,7 +107,7 @@ export async function getPocketStateSupabase(viewer: Viewer) {
   const client = getSupabaseAdmin();
   if (!client) throw new Error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to Railway.");
   await ensureViewer(client, viewer);
-  const [profileResult, communitiesResult, membershipsResult, requestsResult, calloutsResult, completionsResult, profilesResult] = await Promise.all([
+  const [profileResult, communitiesResult, membershipsResult, requestsResult, calloutsResult, completionsResult, profilesResult, activeUsersResult] = await Promise.all([
     client.from("profiles").select("*").eq("id", viewer.id).maybeSingle(),
     client.from("communities").select("*").order("score", { ascending: false }).order("created_at", { ascending: false }),
     client.from("memberships").select("community_id,user_id,role,joined_at").eq("user_id", viewer.id),
@@ -99,8 +115,9 @@ export async function getPocketStateSupabase(viewer: Viewer) {
     client.from("callouts").select("*").order("created_at", { ascending: false }),
     client.from("challenge_completions").select("challenge_id").eq("user_id", viewer.id),
     client.from("profiles").select("id,display_name"),
+    client.from("active_users").select("id", { count: "exact", head: true }),
   ]);
-  for (const result of [profileResult, communitiesResult, membershipsResult, requestsResult, calloutsResult, completionsResult, profilesResult]) assertOk(result.error, "Unable to load Com-Munitiez data.");
+  for (const result of [profileResult, communitiesResult, membershipsResult, requestsResult, calloutsResult, completionsResult, profilesResult, activeUsersResult]) assertOk(result.error, "Unable to load Com-Munitiez data.");
   const communities = (communitiesResult.data as CommunityRow[]).map((row) => {
     const membership = (membershipsResult.data as MembershipRow[]).find((item) => item.community_id === row.id);
     const requested = (requestsResult.data as { community_id: string }[]).some((item) => item.community_id === row.id);
@@ -111,7 +128,7 @@ export async function getPocketStateSupabase(viewer: Viewer) {
   const formatCallout = (row: CalloutRow) => ({ id: row.id, ticker: row.ticker, thesis: row.thesis, createdAt: row.created_at, communityName: communityById.get(row.community_id)?.name ?? "Community", communityTag: communityById.get(row.community_id)?.tag ?? "??", authorName: profileById.get(row.author_id) ?? "Crew member" });
   const callouts = (calloutsResult.data as CalloutRow[]).slice(0, 8).map(formatCallout);
   const personalCallouts = (calloutsResult.data as CalloutRow[]).filter((row) => row.author_id === viewer.id).slice(0, 12).map(formatCallout);
-  return { viewer: profileShape(profileResult.data as ProfileRow | null, viewer), communities, callouts, personalCallouts, challenges, completedChallengeIds: (completionsResult.data as { challenge_id: string }[]).map((row) => row.challenge_id) };
+  return { viewer: profileShape(profileResult.data as ProfileRow | null, viewer), communities, callouts, personalCallouts, challenges, completedChallengeIds: (completionsResult.data as { challenge_id: string }[]).map((row) => row.challenge_id), activeUserCount: activeUsersResult.count ?? 0 };
 }
 
 export async function getCommunityDetailSupabase(viewer: Viewer, communityId: string) {
@@ -175,7 +192,15 @@ export async function runPocketActionSupabase(viewer: Viewer, payload: Record<st
     assertOk((await client.from("profiles").update({ xp: (profile.data?.xp ?? 240) + challenge.xp }).eq("id", viewer.id)).error, "Unable to update XP.");
     return { message: `Challenge complete. You earned ${challenge.xp} XP.` };
   }
-  if (action === "save-wallet") { const walletAddress = requireText(payload.walletAddress, "Wallet address", 4, 120); assertOk((await client.from("profiles").update({ wallet_address: walletAddress }).eq("id", viewer.id)).error, "Unable to save your wallet."); return { message: "Wallet address saved. Live wallet PnL needs a connected chain data source." }; }
+  if (action === "save-wallet") {
+    const walletAddress = normalizePublicWalletAddress(payload.walletAddress);
+    const existing = await client.from("active_users").select("id").eq("wallet_address", walletAddress).neq("id", viewer.id).maybeSingle();
+    assertOk(existing.error, "Unable to check that wallet address.");
+    if (existing.data) throw new Error("That public wallet is already linked to another account.");
+    assertOk((await client.from("profiles").update({ wallet_address: walletAddress }).eq("id", viewer.id)).error, "Unable to save your wallet.");
+    assertOk((await client.from("active_users").upsert({ id: viewer.id, wallet_address: walletAddress, display_name: viewer.displayName, last_seen_at: new Date().toISOString() }, { onConflict: "id" })).error, "Unable to activate your wallet account.");
+    return { message: `Wallet account created for ${walletDisplayName(walletAddress)}. Live wallet PnL needs a connected chain data source.` };
+  }
   if (action === "save-avatar") { const avatarKey = mediaKey(payload.avatarKey, "avatar"); if (!avatarKey) throw new Error("Choose an image before saving your avatar."); assertOk((await client.from("profiles").update({ avatar_key: avatarKey }).eq("id", viewer.id)).error, "Unable to save your profile photo."); return { message: "Profile photo saved." }; }
   if (action === "start-battle") {
     const challengerCommunityId = requireText(payload.challengerCommunityId, "Your community", 1, 100); const opponentCommunityId = requireText(payload.opponentCommunityId, "Opponent community", 1, 100); if (challengerCommunityId === opponentCommunityId) throw new Error("Choose another community to start a battle.");
