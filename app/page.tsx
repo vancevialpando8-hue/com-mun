@@ -112,24 +112,27 @@ export default function Home() {
   const mine = state?.communities.filter((community) => community.viewerRole) ?? [];
   const leaderCrew = mine.find((community) => community.viewerRole === "leader") ?? mine[0];
   const hasCrew = mine.length > 0;
+  const walletConnected = Boolean(state?.viewer.walletAddress);
   const xp = state?.viewer.xp ?? 0;
   const openCallout = (communityId = mine[0]?.id ?? "") => {
+    if (!walletConnected) { announce("Connect a public wallet from your profile to use community actions."); return; }
     setSelectedCrew(communityId);
     setCalloutOpen(true);
   };
   const openCrewBuilder = () => {
+    if (!walletConnected) { window.location.assign("/profile"); return; }
     if (hasCrew) { announce(`You are already with ${mine[0].name}. Leave that crew before building a new one.`); return; }
     setCreateOpen(true);
   };
 
   if (!arenaOpen) return <main className="launch-page" ref={root}>
-    <header className="launch-nav"><a className="brand" href="#top" aria-label="Com-Munitiez home"><BrandLockup /></a><div className="launch-nav-links"><a href="#how-it-works">How it works</a><a href="#season">Season 01</a><button className="launch-login" onClick={() => setArenaOpen(true)}>Log in</button></div></header>
+    <header className="launch-nav"><a className="brand" href="#top" aria-label="Com-Munitiez home"><BrandLockup /></a><div className="launch-nav-links"><a href="#how-it-works">How it works</a><a href="#season">Season 01</a><button className="launch-login" onClick={() => setArenaOpen(true)}>Check out the app</button></div></header>
     <section className="launch-hero" id="top">
       <div className="launch-copy">
         <p className="season-chip"><span /> Season 01 · Crews are forming</p>
         <h1>Find your people.<br /><em>Run the board.</em></h1>
         <p>Com-Munitiez turns meme coin conviction into a team sport. Build a crew, make calls together, stack reputation, and take the weekly pot.</p>
-        <div className="launch-actions"><button className="launch-primary" onClick={() => setArenaOpen(true)}>Enter the arena <span>↗</span></button><button className="launch-text" onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}>See how crews win</button></div>
+        <div className="launch-actions"><button className="launch-primary" onClick={() => setArenaOpen(true)}>Check out the app <span>↗</span></button><button className="launch-text" onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}>See how crews win</button></div>
         <div className="launch-proof"><span><b>50</b> max members</span><span><b>100</b> point crew score</span><span><b>0</b> solo winners</span></div>
       </div>
       <div className="launch-board" aria-label="Current season standings">
@@ -146,7 +149,7 @@ export default function Home() {
   </main>;
 
   return <main className="pocket-app" ref={root}>
-    <header className="nav-shell"><a className="brand" href="#top" aria-label="Com-Munitiez home"><BrandLockup /></a><nav aria-label="Main navigation"><Link href="/communities">Explore communities</Link><Link href="/profile">Profile</Link><Link href="/battles">Battles</Link></nav><div className="nav-actions"><Link className="profile-button" href="/profile">{state?.viewer.avatarKey ? <img className="nav-avatar" src={mediaUrl(state.viewer.avatarKey)} alt="" /> : state ? initials(state.viewer.displayName) : "--"}<span>{state?.viewer.displayName ?? "Loading"}</span></Link>{hasCrew && leaderCrew ? <Link className="nav-cta" href={`/community/${leaderCrew.id}`}>Your crew</Link> : <button className="nav-cta" onClick={openCrewBuilder}>Start a crew</button>}</div></header>
+    <header className="nav-shell"><a className="brand" href="#top" aria-label="Com-Munitiez home"><BrandLockup /></a><nav aria-label="Main navigation"><Link href="/communities">Explore communities</Link><Link href="/profile">Profile</Link><Link href="/battles">Battles</Link></nav><div className="nav-actions"><Link className="profile-button" href="/profile">{state?.viewer.avatarKey ? <img className="nav-avatar" src={mediaUrl(state.viewer.avatarKey)} alt="" /> : state ? initials(state.viewer.displayName) : "--"}<span>{state?.viewer.displayName ?? "Loading"}</span></Link>{hasCrew && leaderCrew ? <Link className="nav-cta" href={`/community/${leaderCrew.id}`}>Your crew</Link> : walletConnected ? <button className="nav-cta" onClick={openCrewBuilder}>Start a crew</button> : <Link className="nav-cta" href="/profile">Connect wallet</Link>}</div></header>
     <section className="arena-hud" aria-label="Your current season status"><div className="hud-season"><span className="live-dot" /> <b>Season 01</b><small>Week 03 · 4d 08h left</small></div><div className="hud-stats"><span><small>Your level</small><b>{state ? levelFor(xp) : "—"}</b></span><span><small>Crew rank</small><b>{leaderCrew ? "#18" : "—"}</b></span><span><small>XP today</small><b>+{state ? Math.min(45, 12 + state.completedChallengeIds.length * 8) : "—"}</b></span></div><button className="hud-action" onClick={() => openCallout()} disabled={!mine.length}>+ Drop a call</button></section>
 
     <section className="hero" id="top"><div className="hero-copy-wrap"><p className="kicker">Your season starts here</p><h1>{state ? <>Welcome back,<br /><em>{state.viewer.displayName.split(" ")[0]}.</em></> : <>Make the call.<br /><em>Keep the culture.</em></>}</h1><p className="hero-copy">{leaderCrew ? <>Your crew is on the board. Feed its score with calls that hold, members who show up, and a culture people want to rep.</> : <>Pick a side or fly your own flag. Every move from here adds to the reputation the whole community owns.</>}</p><div className="hero-actions">{leaderCrew ? <Link className="primary-button" href={`/community/${leaderCrew.id}`}>Open your crew</Link> : <Link className="primary-button" href="/communities">Explore communities</Link>}<button className="secondary-button" onClick={openCrewBuilder}>{hasCrew ? "One crew only" : "Build a crew"}</button></div></div><div className="hero-signal"><Image src="/brand/com-munitiez-banner-logo.png" alt="Com-Munitiez banner mark" fill priority sizes="(max-width: 900px) 88vw, 40vw" /><div className="signal-stamp"><span>Next payout</span><b>04D 08H</b><small>Top crews split the pot</small></div></div></section>
