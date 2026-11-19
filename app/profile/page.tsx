@@ -5,6 +5,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { BrandLockup } from "../components/brand-lockup";
+import { AppTabs } from "../components/app-tabs";
 
 type Community = { id: string; viewerRole: string | null };
 type ProfileState = { viewer: { displayName: string; xp: number; referrals: number; walletAddress: string | null; walletPnl: string; avatarKey: string | null; memberStatus: string }; communities: Community[]; completedChallengeIds: string[]; activeUserCount: number };
@@ -23,7 +24,7 @@ export default function Profile() {
   if (!state && !error) return <main className="detail-page"><p className="detail-loading">Loading your profile…</p></main>;
   if (!state) return <main className="detail-page"><Link className="back-link" href="/">← Com-Munitiez</Link><div className="empty-panel"><h1>Profile unavailable.</h1><p>{error}</p></div></main>;
   const { viewer } = state; const crews = state.communities.filter((community) => community.viewerRole);
-  return <main className="detail-page profile-page"><header className="detail-nav"><Link className="brand" href="/"><BrandLockup /></Link><nav><Link href="/communities">Explore communities</Link><Link href="/profile">My profile</Link></nav></header>
+  return <main className="detail-page profile-page"><header className="detail-nav"><Link className="brand" href="/?app=1"><BrandLockup /></Link><AppTabs active="personal" crewHref={crews[0] ? `/community/${crews[0].id}` : "/communities"} /></header>
     <section className="profile-hero"><div className="profile-avatar">{viewer.avatarKey ? <img src={mediaUrl(viewer.avatarKey)} alt="" /> : initials(viewer.displayName)}</div><div><p className="kicker">Member profile</p><h1>{viewer.displayName}</h1><p>{viewer.memberStatus} · Level {levelFor(viewer.xp)} · {viewer.walletAddress ? "wallet connected" : "preview mode · connect a wallet to unlock actions"}</p><form className="profile-photo-form" onSubmit={saveAvatar}><label htmlFor="avatar">Update photo<input id="avatar" name="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required /></label><button disabled={busy} type="submit">{busy ? "Saving…" : "Save photo"}</button></form></div><div className="profile-xp"><span>Community XP</span><strong>{viewer.xp}</strong><i><b style={{ width: `${Math.min(100, (viewer.xp % 250) / 2.5)}%` }} /></i><small>{viewer.xp % 250} / 250 to next level</small></div></section>
     {error && <div className="error-banner room-error" role="alert">{error}</div>}
     <section className="profile-stats"><article><span>Status</span><strong>{viewer.memberStatus}</strong><small>Earned through participation</small></article><article><span>Communities</span><strong>{crews.length}</strong><small>Current memberships</small></article><article><span>Completed challenges</span><strong>{state.completedChallengeIds.length}</strong><small>Culture-building actions</small></article><article><span>Active users</span><strong>{state.activeUserCount}</strong><small>Wallet accounts seen</small></article></section>
