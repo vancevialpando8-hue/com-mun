@@ -13,7 +13,11 @@ type Response = { community: Room; state: { completedChallengeIds: string[]; vie
 
 const initials = (name: string) => name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 const mediaUrl = (key: string) => `/api/media?key=${encodeURIComponent(key)}`;
-const date = (value: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(`${value}Z`));
+const date = (value: string) => {
+  const parsed = new Date(value);
+  const fallback = Number.isNaN(parsed.getTime()) ? new Date(`${value}Z`) : parsed;
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(fallback);
+};
 
 export default function CommunityRoom() {
   const params = useParams<{ id: string }>();
