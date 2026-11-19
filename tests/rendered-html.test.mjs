@@ -23,8 +23,8 @@ test("ships the community experience instead of the starter preview", async () =
   assert.match(page, /create-community/);
   assert.match(page, /create-callout/);
   assert.match(page, /complete-challenge/);
-  assert.match(page, /ScrollTrigger/);
   assert.match(page, /hero-signal/);
+  assert.doesNotMatch(page, /directory-list|journey-shell|score-intro|battle-section/);
   assert.doesNotMatch(page, /picsum\.photos|hero-image/);
   assert.match(room, /Community talk/);
   assert.match(room, /Active callouts/);
