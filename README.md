@@ -1,8 +1,8 @@
 # vinext-starter
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+A full-stack Com-Munitiez app running on vinext with Supabase Postgres/Storage
+and Railway deployment support. Cloudflare D1/R2 remains as a local/Sites
+fallback while the Railway environment uses Supabase.
 
 ## Prerequisites
 
@@ -17,6 +17,18 @@ npm run build
 ```
 
 This starter does not use `wrangler.jsonc`.
+
+## Supabase + Railway
+
+Copy `.env.example` to `.env.local` for local Node runs. Railway needs
+`SUPABASE_URL` and the server-only `SUPABASE_SERVICE_ROLE_KEY` set as service
+variables. Never prefix the service-role key with `NEXT_PUBLIC_` and never
+commit it. The Supabase schema is tracked in
+`supabase/migrations/20261119000000_initial_pocket_schema.sql`; the migration
+has already been applied to the `com-mun` project.
+
+Railway reads `railway.toml`, builds with `npm run build`, starts with `npm
+start`, and probes `/api/pocket` for health.
 
 ## Included Shape
 

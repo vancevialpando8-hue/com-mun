@@ -1,4 +1,11 @@
 import { getD1 } from "./index";
+import {
+  getBattleStateSupabase,
+  getCommunityDetailSupabase,
+  getPocketStateSupabase,
+  getSupabaseAdmin,
+  runPocketActionSupabase,
+} from "./supabase-pocket";
 
 export type Viewer = { id: string; displayName: string };
 
@@ -78,7 +85,7 @@ async function ensureViewer(viewer: Viewer) {
   await getD1().prepare("INSERT INTO profiles (id, display_name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name").bind(viewer.id, viewer.displayName).run();
 }
 
-export async function getPocketState(viewer: Viewer) {
+async function getPocketStateD1(viewer: Viewer) {
   await ensurePocketSchema(); await ensureViewer(viewer);
   const db = getD1();
   const [profile, communityResult, calloutResult, personalCalloutResult, completionResult] = await Promise.all([
@@ -91,8 +98,8 @@ export async function getPocketState(viewer: Viewer) {
   return { viewer: profile ?? { id: viewer.id, displayName: viewer.displayName, xp: 240, referrals: 0, walletAddress: null, walletPnl: "0.0", avatarKey: null, memberStatus: "Scout" }, communities: communityResult.results, callouts: calloutResult.results, personalCallouts: personalCalloutResult.results, challenges, completedChallengeIds: completionResult.results.map((row) => row.id) };
 }
 
-export async function getCommunityDetail(viewer: Viewer, communityId: string) {
-  const state = await getPocketState(viewer); const db = getD1();
+async function getCommunityDetailD1(viewer: Viewer, communityId: string) {
+  const state = await getPocketStateD1(viewer); const db = getD1();
   const community = state.communities.find((item) => item.id === communityId);
   if (!community) throw new Error("That community is no longer available.");
   const viewerCrew = state.communities.find((item) => item.viewerRole);
@@ -104,8 +111,8 @@ export async function getCommunityDetail(viewer: Viewer, communityId: string) {
   return { ...community, viewerCrew: viewerCrew ? { id: viewerCrew.id, name: viewerCrew.name } : null, members: members.results, messages: messages.results.reverse(), callouts: callouts.results, challenges };
 }
 
-export async function getBattleState(viewer: Viewer) {
-  const state = await getPocketState(viewer);
+async function getBattleStateD1(viewer: Viewer) {
+  const state = await getPocketStateD1(viewer);
   const db = getD1();
   const battles = await db.prepare("SELECT b.id, b.status, b.prize_points as prizePoints, b.ends_at as endsAt, b.created_at as createdAt, challenger.id as challengerId, challenger.name as challengerName, challenger.tag as challengerTag, challenger.weekly_pnl as challengerPnl, opponent.id as opponentId, opponent.name as opponentName, opponent.tag as opponentTag, opponent.weekly_pnl as opponentPnl FROM battles b JOIN communities challenger ON challenger.id = b.challenger_community_id JOIN communities opponent ON opponent.id = b.opponent_community_id WHERE b.status = 'active' ORDER BY b.created_at DESC LIMIT 20").all();
   const leaderboard = [...state.communities].sort((left, right) => Number(right.weeklyPnl) - Number(left.weeklyPnl)).map((community, index) => ({ ...community, rank: index + 1 }));
@@ -124,7 +131,7 @@ function mediaKey(value: unknown, prefix: "avatar" | "community") {
   return key.startsWith(`${prefix}/`) && key.length <= 180 ? key : null;
 }
 
-export async function runPocketAction(viewer: Viewer, payload: Record<string, unknown>) {
+async function runPocketActionD1(viewer: Viewer, payload: Record<string, unknown>) {
   await ensurePocketSchema(); await ensureViewer(viewer); const db = getD1(); const action = payload.action;
   if (action === "create-community") {
     const existingMembership = await db.prepare("SELECT c.name FROM memberships m JOIN communities c ON c.id = m.community_id WHERE m.user_id = ? LIMIT 1").bind(viewer.id).first<{ name: string }>();
@@ -191,4 +198,20 @@ export async function runPocketAction(viewer: Viewer, payload: Record<string, un
     const body = requireText(payload.body, "Message", 1, 500); await db.prepare("INSERT INTO community_messages (id, community_id, author_id, body) VALUES (?, ?, ?, ?)").bind(crypto.randomUUID(), communityId, viewer.id, body).run(); return { message: "Message posted to the community room." };
   }
   throw new Error("Unknown Pocket action.");
+}
+
+export async function getPocketState(viewer: Viewer) {
+  return getSupabaseAdmin() ? getPocketStateSupabase(viewer) : getPocketStateD1(viewer);
+}
+
+export async function getCommunityDetail(viewer: Viewer, communityId: string) {
+  return getSupabaseAdmin() ? getCommunityDetailSupabase(viewer, communityId) : getCommunityDetailD1(viewer, communityId);
+}
+
+export async function getBattleState(viewer: Viewer) {
+  return getSupabaseAdmin() ? getBattleStateSupabase(viewer) : getBattleStateD1(viewer);
+}
+
+export async function runPocketAction(viewer: Viewer, payload: Record<string, unknown>) {
+  return getSupabaseAdmin() ? runPocketActionSupabase(viewer, payload) : runPocketActionD1(viewer, payload);
 }

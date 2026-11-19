@@ -1,5 +1,6 @@
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getR2 } from "../../../db";
+import { getSupabaseAdmin } from "../../../db/supabase-pocket";
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const imageExtensions: Record<string, string> = {
@@ -37,9 +38,19 @@ export async function POST(request: Request) {
     }
 
     const key = `${scope}/${crypto.randomUUID()}.${extension}`;
-    await getR2().put(key, await image.arrayBuffer(), {
-      httpMetadata: { contentType: image.type, cacheControl: "public, max-age=31536000, immutable" },
-    });
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const { error } = await supabase.storage.from("community-media").upload(key, await image.arrayBuffer(), {
+        contentType: image.type,
+        cacheControl: "31536000",
+        upsert: false,
+      });
+      if (error) throw new Error(error.message);
+    } else {
+      await getR2().put(key, await image.arrayBuffer(), {
+        httpMetadata: { contentType: image.type, cacheControl: "public, max-age=31536000, immutable" },
+      });
+    }
     return Response.json({ key });
   } catch (error) {
     return Response.json({ error: messageFor(error) }, { status: 400 });
@@ -51,6 +62,12 @@ export async function GET(request: Request) {
     const key = safeKey(new URL(request.url).searchParams.get("key"));
     if (!key) return new Response("Not found", { status: 404 });
 
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const { data, error } = await supabase.storage.from("community-media").download(key);
+      if (error || !data) return new Response("Not found", { status: 404 });
+      return new Response(data, { headers: { "Cache-Control": "public, max-age=31536000, immutable" } });
+    }
     const image = await getR2().get(key);
     if (!image) return new Response("Not found", { status: 404 });
     return new Response(image.body, {
