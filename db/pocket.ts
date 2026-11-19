@@ -139,6 +139,10 @@ function mediaKey(value: unknown, prefix: "avatar" | "community") {
 
 async function runPocketActionD1(viewer: Viewer, payload: Record<string, unknown>) {
   await ensurePocketSchema(); await ensureViewer(viewer); const db = getD1(); const action = payload.action;
+  if (action !== "save-wallet") {
+    const profile = await db.prepare("SELECT wallet_address as walletAddress FROM profiles WHERE id = ?").bind(viewer.id).first<{ walletAddress: string | null }>();
+    if (!profile?.walletAddress) throw new Error("Connect a public wallet from your profile before using community actions.");
+  }
   if (action === "create-community") {
     const existingMembership = await db.prepare("SELECT c.name FROM memberships m JOIN communities c ON c.id = m.community_id WHERE m.user_id = ? LIMIT 1").bind(viewer.id).first<{ name: string }>();
     if (existingMembership) throw new Error(`Leave ${existingMembership.name} before creating a new crew.`);
