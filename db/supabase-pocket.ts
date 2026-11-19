@@ -175,6 +175,11 @@ export async function runPocketActionSupabase(viewer: Viewer, payload: Record<st
   if (!client) throw new Error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to Railway.");
   await ensureViewer(client, viewer);
   const action = payload.action;
+  if (action !== "save-wallet") {
+    const profile = await client.from("profiles").select("wallet_address").eq("id", viewer.id).maybeSingle();
+    assertOk(profile.error, "Unable to verify your wallet account.");
+    if (!profile.data?.wallet_address) throw new Error("Connect a public wallet from your profile before using community actions.");
+  }
   if (action === "create-community") {
     const { data: existing } = await client.from("memberships").select("community_id,communities(name)").eq("user_id", viewer.id).maybeSingle();
     if (existing) throw new Error(`Leave your current crew before creating a new one.`);
