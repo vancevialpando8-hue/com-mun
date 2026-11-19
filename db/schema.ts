@@ -13,6 +13,14 @@ export const profiles = sqliteTable("profiles", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const activeUsers = sqliteTable("active_users", {
+  id: text("id").primaryKey().references(() => profiles.id, { onDelete: "cascade" }),
+  walletAddress: text("wallet_address").unique(),
+  displayName: text("display_name").notNull(),
+  lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const communities = sqliteTable("communities", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
