@@ -5,6 +5,7 @@ import {
   getPocketStateSupabase,
   getSupabaseAdmin,
   runPocketActionSupabase,
+  normalizePublicWalletAddress,
 } from "./supabase-pocket";
 
 export type Viewer = { id: string; displayName: string };
@@ -35,6 +36,7 @@ async function ensurePocketSchema() {
     const db = getD1();
     await db.batch([
       db.prepare("CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, xp INTEGER NOT NULL DEFAULT 240, referrals INTEGER NOT NULL DEFAULT 0, wallet_address TEXT, wallet_pnl TEXT NOT NULL DEFAULT '0.0', avatar_key TEXT, member_status TEXT NOT NULL DEFAULT 'Scout', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+      db.prepare("CREATE TABLE IF NOT EXISTS active_users (id TEXT PRIMARY KEY, wallet_address TEXT UNIQUE, display_name TEXT NOT NULL, last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
       db.prepare("CREATE TABLE IF NOT EXISTS communities (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, tag TEXT NOT NULL, motto TEXT NOT NULL, privacy TEXT NOT NULL, owner_id TEXT NOT NULL, member_count INTEGER NOT NULL DEFAULT 1, capacity INTEGER NOT NULL DEFAULT 50, score INTEGER NOT NULL DEFAULT 0, tier TEXT NOT NULL DEFAULT 'bronze', icon_key TEXT, weekly_pnl TEXT NOT NULL DEFAULT '0.0', integrity_status TEXT NOT NULL DEFAULT '0 integrity flags', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
       db.prepare("CREATE TABLE IF NOT EXISTS memberships (community_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'new_member', joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (community_id, user_id))"),
       db.prepare("CREATE TABLE IF NOT EXISTS join_requests (id TEXT PRIMARY KEY, community_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE (community_id, user_id))"),
@@ -82,20 +84,24 @@ async function ensurePocketSchema() {
 }
 
 async function ensureViewer(viewer: Viewer) {
-  await getD1().prepare("INSERT INTO profiles (id, display_name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name").bind(viewer.id, viewer.displayName).run();
+  const db = getD1();
+  await db.prepare("INSERT INTO profiles (id, display_name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name").bind(viewer.id, viewer.displayName).run();
+  const profile = await db.prepare("SELECT wallet_address as walletAddress FROM profiles WHERE id = ?").bind(viewer.id).first<{ walletAddress: string | null }>();
+  await db.prepare("INSERT INTO active_users (id, wallet_address, display_name, last_seen_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET wallet_address = excluded.wallet_address, display_name = excluded.display_name, last_seen_at = CURRENT_TIMESTAMP").bind(viewer.id, profile?.walletAddress ?? null, viewer.displayName).run();
 }
 
 async function getPocketStateD1(viewer: Viewer) {
   await ensurePocketSchema(); await ensureViewer(viewer);
   const db = getD1();
-  const [profile, communityResult, calloutResult, personalCalloutResult, completionResult] = await Promise.all([
+  const [profile, communityResult, calloutResult, personalCalloutResult, completionResult, activeUsers] = await Promise.all([
     db.prepare("SELECT id, display_name as displayName, xp, referrals, wallet_address as walletAddress, wallet_pnl as walletPnl, avatar_key as avatarKey, member_status as memberStatus FROM profiles WHERE id = ?").bind(viewer.id).first(),
     db.prepare(`SELECT c.id, c.name, c.tag, c.motto, c.privacy, c.member_count as memberCount, c.capacity, c.score, c.tier, c.icon_key as iconKey, c.weekly_pnl as weeklyPnl, c.integrity_status as integrityStatus, m.role as viewerRole, EXISTS(SELECT 1 FROM join_requests r WHERE r.community_id = c.id AND r.user_id = ?) as requested, (SELECT COUNT(*) FROM callouts co WHERE co.community_id = c.id) as calloutCount FROM communities c LEFT JOIN memberships m ON m.community_id = c.id AND m.user_id = ? ORDER BY c.score DESC, c.created_at DESC`).bind(viewer.id, viewer.id).all<CommunityStateRow>(),
     db.prepare("SELECT co.id, co.ticker, co.thesis, co.created_at as createdAt, c.name as communityName, c.tag as communityTag, p.display_name as authorName FROM callouts co JOIN communities c ON c.id = co.community_id JOIN profiles p ON p.id = co.author_id ORDER BY co.created_at DESC LIMIT 8").all(),
     db.prepare("SELECT co.id, co.ticker, co.thesis, co.created_at as createdAt, c.name as communityName, p.display_name as authorName FROM callouts co JOIN communities c ON c.id = co.community_id JOIN profiles p ON p.id = co.author_id WHERE co.author_id = ? ORDER BY co.created_at DESC LIMIT 12").bind(viewer.id).all(),
     db.prepare("SELECT challenge_id as id FROM challenge_completions WHERE user_id = ?").bind(viewer.id).all<{ id: string }>(),
+    db.prepare("SELECT COUNT(*) as count FROM active_users").first<{ count: number }>(),
   ]);
-  return { viewer: profile ?? { id: viewer.id, displayName: viewer.displayName, xp: 240, referrals: 0, walletAddress: null, walletPnl: "0.0", avatarKey: null, memberStatus: "Scout" }, communities: communityResult.results, callouts: calloutResult.results, personalCallouts: personalCalloutResult.results, challenges, completedChallengeIds: completionResult.results.map((row) => row.id) };
+  return { viewer: profile ?? { id: viewer.id, displayName: viewer.displayName, xp: 240, referrals: 0, walletAddress: null, walletPnl: "0.0", avatarKey: null, memberStatus: "Scout" }, communities: communityResult.results, callouts: calloutResult.results, personalCallouts: personalCalloutResult.results, challenges, completedChallengeIds: completionResult.results.map((row) => row.id), activeUserCount: activeUsers?.count ?? 0 };
 }
 
 async function getCommunityDetailD1(viewer: Viewer, communityId: string) {
@@ -146,9 +152,12 @@ async function runPocketActionD1(viewer: Viewer, payload: Record<string, unknown
     await db.prepare("UPDATE profiles SET xp = xp + ? WHERE id = ?").bind(challenge.xp, viewer.id).run(); return { message: `Challenge complete. You earned ${challenge.xp} XP.` };
   }
   if (action === "save-wallet") {
-    const walletAddress = requireText(payload.walletAddress, "Wallet address", 4, 120);
+    const walletAddress = normalizePublicWalletAddress(payload.walletAddress);
+    const existing = await db.prepare("SELECT id FROM active_users WHERE wallet_address = ? AND id != ?").bind(walletAddress, viewer.id).first<{ id: string }>();
+    if (existing) throw new Error("That public wallet is already linked to another account.");
     await db.prepare("UPDATE profiles SET wallet_address = ? WHERE id = ?").bind(walletAddress, viewer.id).run();
-    return { message: "Wallet address saved. Live wallet PnL needs a connected chain data source." };
+    await db.prepare("UPDATE active_users SET wallet_address = ?, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").bind(walletAddress, viewer.id).run();
+    return { message: "Wallet account created. Live wallet PnL needs a connected chain data source." };
   }
   if (action === "save-avatar") {
     const avatarKey = mediaKey(payload.avatarKey, "avatar");
