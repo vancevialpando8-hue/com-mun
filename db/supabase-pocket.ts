@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { env as cloudflareEnv } from "cloudflare:workers";
 
 export type Viewer = { id: string; displayName: string };
 
@@ -21,7 +22,10 @@ const challenges = [
 
 function envValue(name: string) {
   const processEnv = (globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }).process?.env;
-  return processEnv?.[name];
+  const processValue = processEnv?.[name];
+  if (processValue) return processValue;
+  const runtimeValue = (cloudflareEnv as unknown as Record<string, unknown>)[name];
+  return typeof runtimeValue === "string" ? runtimeValue : undefined;
 }
 
 export function getSupabaseAdmin(): SupabaseClient | null {
