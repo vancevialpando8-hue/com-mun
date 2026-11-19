@@ -8,19 +8,41 @@ import { useGSAP } from "@gsap/react";
 import Image from "next/image";
 import Link from "next/link";
 import { BrandLockup } from "./components/brand-lockup";
+import { AppTabs } from "./components/app-tabs";
 
 
 type Community = { id: string; name: string; tag: string; motto: string; privacy: "public" | "private"; memberCount: number; capacity: number; score: number; tier: "bronze" | "silver" | "gold" | "diamond"; iconKey: string | null; weeklyPnl: string; integrityStatus: string; viewerRole: string | null; requested: number; calloutCount: number };
 type Challenge = { id: string; title: string; detail: string; xp: number };
 type PocketState = { viewer: { id: string; displayName: string; xp: number; referrals: number; walletAddress: string | null; walletPnl: string; avatarKey: string | null; memberStatus: string }; communities: Community[]; callouts: { id: string; ticker: string; thesis: string; createdAt: string; communityName: string; communityTag: string; authorName: string }[]; challenges: Challenge[]; completedChallengeIds: string[] };
+type Battle = { id: string; prizePoints: number; endsAt: string; challengerName: string; challengerTag: string; challengerPnl: string; opponentName: string; opponentTag: string; opponentPnl: string };
+type BattleState = { battles: Battle[] };
 
 const levelFor = (xp: number) => Math.max(1, Math.floor(xp / 250) + 1);
 const initials = (name: string) => name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 const mediaUrl = (key: string) => `/api/media?key=${encodeURIComponent(key)}`;
 
+function PreviewHome({ state, battleState }: { state: PocketState; battleState: BattleState | null }) {
+  const topCrews = state.communities.slice(0, 4);
+  const events = [
+    { date: "Thu 21", title: "Crew battle lock", detail: "Weekly PnL snapshots close." },
+    { date: "Fri 22", title: "Integrity snapshot", detail: "Bundle and hold checks refresh." },
+    { date: "Sun 24", title: "Season payout", detail: "The winning crew takes the pot." },
+  ];
+
+  return <section className="preview-home" aria-labelledby="preview-title">
+    <div className="preview-welcome"><div><p className="kicker">Preview mode · discovery board</p><h1 id="preview-title">See the board.<br /><em>Find your people.</em></h1><p>Browse the live season before you commit. Connect a public wallet when you are ready to join a crew, start one, and earn with the room.</p><Link className="primary-button" href="/profile">Connect wallet <span>↗</span></Link></div><div className="preview-status"><span>YOUR STATUS</span><strong>Explorer</strong><small>Wallet not linked</small><Link href="/profile">Set up your account →</Link></div></div>
+    <div className="preview-grid">
+      <section className="preview-panel preview-crews"><div className="preview-panel-heading"><div><p className="kicker">Top crews</p><h2>Read the room.</h2></div><Link href="/communities">Explore all →</Link></div><div className="preview-crew-list">{topCrews.map((community, index) => <Link className="preview-crew-row" href={`/community/${community.id}`} key={community.id}><span>0{index + 1}</span><b>{community.tag}</b><div><strong>{community.name}</strong><small>{community.memberCount}/{community.capacity} members · {community.tier}</small></div><em>+{community.weeklyPnl}%</em></Link>)}</div></section>
+      <section className="preview-panel preview-battles"><div className="preview-panel-heading"><div><p className="kicker">This week</p><h2>Battle board.</h2></div><Link href="/battles">Open arena →</Link></div>{battleState?.battles.length ? <div className="preview-battle-list">{battleState.battles.slice(0, 4).map((battle) => <Link className="preview-battle-row" href="/battles" key={battle.id}><div><strong>{battle.challengerTag} <span>vs</span> {battle.opponentTag}</strong><small>{battle.challengerName} · {battle.opponentName}</small></div><b>{battle.prizePoints.toLocaleString()} PTS</b></Link>)}</div> : <p className="preview-empty">No active battles yet. The first matchup will appear here.</p>}</section>
+      <section className="preview-panel preview-events"><div className="preview-panel-heading"><div><p className="kicker">Calendar</p><h2>Upcoming events.</h2></div></div><div className="preview-event-list">{events.map((event) => <article key={event.title}><span>{event.date}</span><div><strong>{event.title}</strong><small>{event.detail}</small></div></article>)}</div></section>
+    </div>
+  </section>;
+}
+
 export default function Home() {
   const root = useRef<HTMLElement>(null);
   const [state, setState] = useState<PocketState | null>(null);
+  const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -39,6 +61,7 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
+    const openTimer = new URLSearchParams(window.location.search).get("app") === "1" ? window.setTimeout(() => setArenaOpen(true), 0) : undefined;
     void fetch("/api/pocket", { cache: "no-store" })
       .then(async (response) => ({ response, payload: await response.json() as PocketState & { error?: string } }))
       .then(({ response, payload }) => {
@@ -47,6 +70,15 @@ export default function Home() {
         setState(payload);
       })
       .catch((loadError: unknown) => { if (active) setError(loadError instanceof Error ? loadError.message : "Com-Munitiez could not load."); });
+    return () => { active = false; if (openTimer) window.clearTimeout(openTimer); };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/pocket?battles=1", { cache: "no-store" })
+      .then(async (response) => ({ response, payload: await response.json() as { battles?: BattleState } }))
+      .then(({ response, payload }) => { if (active && response.ok && payload.battles) setBattleState(payload.battles); })
+      .catch(() => undefined);
     return () => { active = false; };
   }, []);
 
@@ -149,7 +181,7 @@ export default function Home() {
   </main>;
 
   return <main className="pocket-app" ref={root}>
-    <header className="nav-shell"><a className="brand" href="#top" aria-label="Com-Munitiez home"><BrandLockup /></a><nav aria-label="Main navigation"><Link href="/communities">Explore communities</Link><Link href="/profile">Profile</Link><Link href="/battles">Battles</Link></nav><div className="nav-actions"><Link className="profile-button" href="/profile">{state?.viewer.avatarKey ? <img className="nav-avatar" src={mediaUrl(state.viewer.avatarKey)} alt="" /> : state ? initials(state.viewer.displayName) : "--"}<span>{state?.viewer.displayName ?? "Loading"}</span></Link>{hasCrew && leaderCrew ? <Link className="nav-cta" href={`/community/${leaderCrew.id}`}>Your crew</Link> : walletConnected ? <button className="nav-cta" onClick={openCrewBuilder}>Start a crew</button> : <Link className="nav-cta" href="/profile">Connect wallet</Link>}</div></header>
+    <header className="nav-shell"><Link className="brand" href="/?app=1" aria-label="Com-Munitiez home"><BrandLockup /></Link><AppTabs active="home" crewHref={leaderCrew ? `/community/${leaderCrew.id}` : "/communities"} /><div className="nav-actions"><Link className="profile-button" href="/profile">{state?.viewer.avatarKey ? <img className="nav-avatar" src={mediaUrl(state.viewer.avatarKey)} alt="" /> : state ? initials(state.viewer.displayName) : "--"}<span>{state?.viewer.displayName ?? "Loading"}</span></Link>{hasCrew && leaderCrew ? <Link className="nav-cta" href={`/community/${leaderCrew.id}`}>Your crew</Link> : walletConnected ? <button className="nav-cta" onClick={openCrewBuilder}>Start a crew</button> : <Link className="nav-cta" href="/profile">Connect wallet</Link>}</div></header>
     <section className="arena-hud" aria-label="Your current season status"><div className="hud-season"><span className="live-dot" /> <b>Season 01</b><small>Week 03 · 4d 08h left</small></div><div className="hud-stats"><span><small>Your level</small><b>{state ? levelFor(xp) : "—"}</b></span><span><small>Crew rank</small><b>{leaderCrew ? "#18" : "—"}</b></span><span><small>XP today</small><b>+{state ? Math.min(45, 12 + state.completedChallengeIds.length * 8) : "—"}</b></span></div><button className="hud-action" onClick={() => openCallout()} disabled={!mine.length}>+ Drop a call</button></section>
 
     <section className="hero" id="top"><div className="hero-copy-wrap"><p className="kicker">Your season starts here</p><h1>{state ? <>Welcome back,<br /><em>{state.viewer.displayName.split(" ")[0]}.</em></> : <>Make the call.<br /><em>Keep the culture.</em></>}</h1><p className="hero-copy">{leaderCrew ? <>Your crew is on the board. Feed its score with calls that hold, members who show up, and a culture people want to rep.</> : <>Pick a side or fly your own flag. Every move from here adds to the reputation the whole community owns.</>}</p><div className="hero-actions">{leaderCrew ? <Link className="primary-button" href={`/community/${leaderCrew.id}`}>Open your crew</Link> : <Link className="primary-button" href="/communities">Explore communities</Link>}<button className="secondary-button" onClick={openCrewBuilder}>{hasCrew ? "One crew only" : "Build a crew"}</button></div></div><div className="hero-signal"><Image src="/brand/com-munitiez-banner-logo.png" alt="Com-Munitiez banner mark" fill priority sizes="(max-width: 900px) 88vw, 40vw" /><div className="signal-stamp"><span>Next payout</span><b>04D 08H</b><small>Top crews split the pot</small></div></div></section>
@@ -158,12 +190,13 @@ export default function Home() {
 
     <section className="crew-section" id="crews"><div className="section-heading"><div><p className="kicker">Your crew station</p><h2>Make moves that<br />build the crew.</h2></div><div className="heading-actions"><button className="text-action" onClick={() => openCallout()} disabled={!mine.length}>Publish a callout</button><Link className="outline-button" href="/communities">Explore communities</Link></div></div>{error && <div className="error-banner" role="alert">{error}<button onClick={() => load().catch(() => undefined)}>Retry</button></div>}
       {!state && !error && <div className="loading-state" role="status">Loading Com-Munitiez...</div>}
-      {state && <div className="bento-grid">
+      {state && walletConnected && <div className="bento-grid">
         <section className="bento bento-profile" id="member-profile"><div className="profile-top"><Link className="member-badge member-profile-link" href="/profile" aria-label="Open your profile">{state.viewer.avatarKey ? <img src={mediaUrl(state.viewer.avatarKey)} alt="" /> : initials(state.viewer.displayName)}</Link><div><p className="kicker">Member badge</p><h3>{state.viewer.displayName}</h3></div><span className="level">Level {levelFor(xp)}</span></div><p className="profile-copy">Show up for your crew, complete challenges, and earn a reputation members can trust.</p><div className="xp-row"><span>Community XP</span><b>{xp} / {levelFor(xp) * 250} XP</b></div><div className="xp-bar"><i style={{ width: `${Math.min(100, (xp % 250) / 2.5)}%` }} /></div><div className="profile-foot"><span><b>{mine.length}</b> crews</span><span><b>{state.viewer.referrals}</b> referrals</span><span><b>{state.completedChallengeIds.length}</b> challenges</span></div><Link className="profile-link" href="/profile">Open profile →</Link></section>
         <section className="bento bento-crew"><p className="kicker">Your active crew</p>{leaderCrew ? <><div className="crew-identity"><span className="crew-crest">{leaderCrew.iconKey ? <img src={mediaUrl(leaderCrew.iconKey)} alt="" /> : leaderCrew.tag}</span><div><h3>{leaderCrew.name}</h3><p>{leaderCrew.motto}</p></div><b className={`tier-chip ${leaderCrew.tier}`}>{leaderCrew.tier}</b></div><div className="crew-numbers"><span><b>{leaderCrew.memberCount}</b>/50 members</span><span><b>{leaderCrew.score || "Not rated"}</b>{leaderCrew.score ? "/100 score" : ""}</span><span><b>{leaderCrew.calloutCount}</b> calls</span></div><div className="crew-actions"><button className="dark-button" onClick={() => { setSelectedCrew(leaderCrew.id); setCalloutOpen(true); }}>Make a callout</button><button className="crew-leave-button" disabled={busy || leaderCrew.viewerRole === "leader"} title={leaderCrew.viewerRole === "leader" ? "Transfer leadership before leaving" : "Leave this crew"} onClick={() => void act({ action: "leave-community", communityId: leaderCrew.id })}>Leave crew</button></div></> : <><h3>No crew yet.</h3><p>Join a public crew or create the culture you want to be part of.</p><button className="dark-button" onClick={openCrewBuilder}>Start a crew</button></>}</section>
         <section className="bento bento-challenges"><div className="challenge-title"><div><p className="kicker">Build the culture</p><h3>Daily challenges</h3></div><span>{state.completedChallengeIds.length}/{state.challenges.length}</span></div><div className="challenge-list">{state.challenges.map((challenge) => { const done = state.completedChallengeIds.includes(challenge.id); return <article key={challenge.id}><div><b>{challenge.title}</b><p>{challenge.detail}</p></div><button disabled={done || busy} onClick={() => act({ action: "complete-challenge", communityId: mine[0]?.id ?? "challenge", challengeId: challenge.id })}>{done ? "Complete" : `+${challenge.xp} XP`}</button></article>; })}</div></section>
         <section className="bento bento-integrity"><div><p className="kicker">Built-in integrity</p><h3>Culture needs receipts.</h3><p>Every score takes hold duration, call quality, community growth, and manipulation checks into account.</p></div><div className="integrity-grid"><span>Wallet graph</span><b>Active</b><span>Bundle checks</span><b>Active</b><span>Hold receipts</span><b>Active</b></div></section>
       </div>}
+      {state && !walletConnected && <PreviewHome state={state} battleState={battleState} />}
     </section>
     <footer><a className="brand" href="#top"><BrandLockup /></a><span>Better together, on chain.</span><span>© 2026 Com-Munitiez</span></footer>
 
