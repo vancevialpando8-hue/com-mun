@@ -10,6 +10,14 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.active_users (
+  id text primary key references public.profiles(id) on delete cascade,
+  wallet_address text unique,
+  display_name text not null,
+  last_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.communities (
   id text primary key,
   name text not null unique,
@@ -47,8 +55,10 @@ create index if not exists memberships_community_idx on public.memberships(commu
 create index if not exists callouts_community_idx on public.callouts(community_id, created_at desc);
 create index if not exists messages_community_idx on public.community_messages(community_id, created_at desc);
 create index if not exists battles_status_idx on public.battles(status, created_at desc);
+create index if not exists active_users_last_seen_idx on public.active_users(last_seen_at desc);
 
 alter table public.profiles enable row level security;
+alter table public.active_users enable row level security;
 alter table public.communities enable row level security;
 alter table public.memberships enable row level security;
 alter table public.join_requests enable row level security;
