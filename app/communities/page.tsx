@@ -59,7 +59,7 @@ export default function CommunitiesPage() {
   }
 
   if (!state && !error) return <main className="detail-page"><p className="detail-loading">Loading the crew directory…</p></main>;
-  if (!state) return <main className="detail-page"><Link className="back-link" href="/">← Com-Munitiez</Link><div className="empty-panel"><h1>Directory unavailable.</h1><p>{error}</p><button onClick={() => { setError(""); void load().catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Could not reload.")); }}>Try again</button></div></main>;
+  if (!state) return <main className="detail-page"><Link className="back-link" href="/profile">← Your profile</Link><div className="empty-panel"><h1>Directory unavailable.</h1><p>{error}</p><button onClick={() => { setError(""); void load().catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Could not reload.")); }}>Try again</button></div></main>;
 
   const currentCrew = state.communities.find((community) => community.viewerRole);
   const rankedCommunities = [...state.communities].sort((left, right) => right.score - left.score);
@@ -70,7 +70,7 @@ export default function CommunitiesPage() {
 
   return <main className="detail-page communities-page">
     <header className="detail-nav"><Link className="brand" href="/"><BrandLockup /></Link><nav><Link href="/communities">Explore communities</Link><Link href="/profile">My profile</Link></nav></header>
-    <section className="communities-hero"><div><Link className="back-link" href="/">← Back to arena</Link><p className="kicker">Crew directory</p><h1>Pick one flag.<br /><em>Make it count.</em></h1><p>Every member commits to one crew at a time. Choose the people, culture, and record you want your name beside.</p></div><aside className="crew-commitment"><span>Membership rule</span><strong>1</strong><b>crew at a time</b><p>{currentCrew ? <>You currently fly <Link href={`/community/${currentCrew.id}`}>{currentCrew.name}</Link>.</> : "No flag selected yet. Find the crew you want to help build."}</p></aside></section>
+    <section className="communities-hero"><div><Link className="back-link" href="/profile">← Your profile</Link><p className="kicker">Crew directory</p><h1>Pick one flag.<br /><em>Make it count.</em></h1><p>Every member commits to one crew at a time. Choose the people, culture, and record you want your name beside.</p></div><aside className="crew-commitment"><span>Membership rule</span><strong>1</strong><b>crew at a time</b><p>{currentCrew ? <>You currently fly <Link href={`/community/${currentCrew.id}`}>{currentCrew.name}</Link>.</> : "No flag selected yet. Find the crew you want to help build."}</p></aside></section>
     {error && <div className="error-banner room-error" role="alert">{error}</div>}
     <section className="communities-directory"><div className="directory-heading"><div><p className="kicker">Active crews</p><h2>Read the room.</h2></div><div className="directory-heading-actions"><span>{rankedCommunities.length} crews on the board</span><button className="primary-button" onClick={openCreateGroup}>Create group</button></div></div><div className="community-card-list">{rankedCommunities.map((community, index) => {
       const joined = Boolean(community.viewerRole); const locked = Boolean(currentCrew && !joined); const full = community.memberCount >= community.capacity; const requested = Boolean(community.requested);
