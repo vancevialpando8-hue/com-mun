@@ -95,12 +95,13 @@ export async function getCommunityDetail(viewer: Viewer, communityId: string) {
   const state = await getPocketState(viewer); const db = getD1();
   const community = state.communities.find((item) => item.id === communityId);
   if (!community) throw new Error("That community is no longer available.");
+  const viewerCrew = state.communities.find((item) => item.viewerRole);
   const [members, messages, callouts] = await Promise.all([
     db.prepare("SELECT p.id, p.display_name as displayName, p.xp, p.member_status as memberStatus, m.role, m.joined_at as joinedAt FROM memberships m JOIN profiles p ON p.id = m.user_id WHERE m.community_id = ? ORDER BY CASE m.role WHEN 'leader' THEN 1 WHEN 'co_leader' THEN 2 WHEN 'elder' THEN 3 ELSE 4 END, p.xp DESC LIMIT 50").bind(communityId).all(),
     db.prepare("SELECT cm.id, cm.body, cm.created_at as createdAt, p.display_name as authorName, m.role as authorRole FROM community_messages cm JOIN profiles p ON p.id = cm.author_id LEFT JOIN memberships m ON m.community_id = cm.community_id AND m.user_id = cm.author_id WHERE cm.community_id = ? ORDER BY cm.created_at DESC LIMIT 30").bind(communityId).all(),
     db.prepare("SELECT co.id, co.ticker, co.thesis, co.created_at as createdAt, p.display_name as authorName FROM callouts co JOIN profiles p ON p.id = co.author_id WHERE co.community_id = ? ORDER BY co.created_at DESC LIMIT 12").bind(communityId).all(),
   ]);
-  return { ...community, members: members.results, messages: messages.results.reverse(), callouts: callouts.results, challenges };
+  return { ...community, viewerCrew: viewerCrew ? { id: viewerCrew.id, name: viewerCrew.name } : null, members: members.results, messages: messages.results.reverse(), callouts: callouts.results, challenges };
 }
 
 export async function getBattleState(viewer: Viewer) {
