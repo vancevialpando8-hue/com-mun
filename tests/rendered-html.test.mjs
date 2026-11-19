@@ -35,6 +35,8 @@ test("ships the community experience instead of the starter preview", async () =
   assert.match(battles, /Start 7-day battle/);
   assert.match(communities, /Pick one flag/);
   assert.match(communities, /join-community/);
+  assert.match(communities, /Create group/);
+  assert.match(room, /Leave crew/);
   assert.match(css, /grid-auto-flow:dense/);
   assert.match(css, /@keyframes marquee/);
   assert.match(layout, /Com-Munitiez — conviction is collective/);
