@@ -5,6 +5,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { BrandLockup } from "../components/brand-lockup";
+import { AppTabs } from "../components/app-tabs";
 
 type Community = { id: string; name: string; tag: string; motto: string; privacy: "public" | "private"; memberCount: number; capacity: number; score: number; tier: "bronze" | "silver" | "gold" | "diamond"; iconKey: string | null; weeklyPnl: string; integrityStatus: string; viewerRole: string | null; requested: number; calloutCount: number };
 type CommunityState = { communities: Community[]; viewer: { walletAddress: string | null } };
@@ -72,7 +73,7 @@ export default function CommunitiesPage() {
   };
 
   return <main className="detail-page communities-page">
-    <header className="detail-nav"><Link className="brand" href="/"><BrandLockup /></Link><nav><Link href="/communities">Explore communities</Link><Link href="/profile">My profile</Link></nav></header>
+    <header className="detail-nav"><Link className="brand" href="/?app=1"><BrandLockup /></Link><AppTabs active="explore" crewHref={currentCrew ? `/community/${currentCrew.id}` : "/communities"} /></header>
     <section className="communities-hero"><div><Link className="back-link" href="/profile">← Your profile</Link><p className="kicker">Crew directory</p><h1>Pick one flag.<br /><em>Make it count.</em></h1><p>Every member commits to one crew at a time. Choose the people, culture, and record you want your name beside.</p></div><aside className="crew-commitment"><span>Membership rule</span><strong>1</strong><b>crew at a time</b><p>{currentCrew ? <>You currently fly <Link href={`/community/${currentCrew.id}`}>{currentCrew.name}</Link>.</> : "No flag selected yet. Find the crew you want to help build."}</p></aside></section>
     {error && <div className="error-banner room-error" role="alert">{error}</div>}
     <section className="communities-directory"><div className="directory-heading"><div><p className="kicker">Active crews</p><h2>Read the room.</h2></div><div className="directory-heading-actions"><span>{rankedCommunities.length} crews on the board</span><button className="primary-button" onClick={openCreateGroup}>{walletConnected ? "Create group" : "Connect wallet"}</button></div></div><div className="community-card-list">{rankedCommunities.map((community, index) => {
