@@ -5,6 +5,8 @@ import { sites } from "./build/sites-vite-plugin";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
+const SUPABASE_PROJECT_URL =
+  "https://jpxyvskyfpaqwtelntuw.supabase.co";
 
 // ChatGPT Sites declares optional D1/R2 bindings in hosting.json. They are
 // only needed for the legacy Sites fallback; the standalone Cloudflare Worker
@@ -20,6 +22,12 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const localBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
+  // Keep the public project URL in the generated Worker config. The deploy
+  // command replaces dashboard configuration with this file, while the
+  // service-role key remains a secret binding managed by Cloudflare.
+  vars: {
+    SUPABASE_URL: SUPABASE_PROJECT_URL,
+  },
   d1_databases: d1
     ? [
         {
