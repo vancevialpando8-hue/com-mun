@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { BrandLockup } from "../components/brand-lockup";
+import { AppTabs } from "../components/app-tabs";
 
 type Community = { id: string; name: string; tag: string; score: number; tier: string; weeklyPnl: string; memberCount: number; calloutCount: number; viewerRole: string | null; integrityStatus: string; rank?: number };
 type Battle = { id: string; status: string; prizePoints: number; endsAt: string; challengerId: string; challengerName: string; challengerTag: string; challengerPnl: string; opponentId: string; opponentName: string; opponentTag: string; opponentPnl: string };
@@ -51,7 +52,7 @@ export default function BattlesPage() {
   if (!data) return <main className="detail-page"><Link className="back-link" href="/profile">← Your profile</Link><div className="empty-panel"><h1>Battle board unavailable.</h1><p>{error}</p><button onClick={() => void load().catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Could not reload."))}>Try again</button></div></main>;
 
   return <main className="detail-page battles-page">
-    <header className="detail-nav"><Link className="brand" href="/"><BrandLockup /></Link><nav><Link href="/communities">Explore communities</Link><Link href="/profile">My profile</Link></nav></header>
+    <header className="detail-nav"><Link className="brand" href="/?app=1"><BrandLockup /></Link><AppTabs active="battles" crewHref={data.eligibleCommunities[0] ? `/community/${data.eligibleCommunities[0].id}` : "/communities"} /></header>
     <section className="battle-page-hero"><div><Link className="back-link" href="/profile">← Your profile</Link><p className="kicker">Weekly community arena</p><h1>Win the week.<br /><em>Bring your whole crew.</em></h1><p>Battle boards rank communities on collective weekly PnL. Leaders can start a seven-day faceoff, then rally their members around one shared result.</p></div><div className="battle-seal"><span>LIVE</span><b>VS</b><i>collective<br />conviction</i></div></section>
     {error && <div className="error-banner room-error" role="alert">{error}</div>}
     <section className="battle-page-grid">
