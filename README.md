@@ -28,7 +28,12 @@ commit it. The Supabase schema is tracked in
 has already been applied to the `com-mun` project.
 
 Railway reads `railway.toml`, builds with `npm run build`, starts with `npm
-start`, and probes `/api/pocket` for health.
+start`, and probes `/api/pocket` for health. Production should also set a
+dedicated random `WALLET_COOKIE_SECRET`; the service-role key is only a
+backward-compatible fallback. `ALLOW_UNVERIFIED_CHATGPT_HEADER` defaults to
+`false` because the public Worker must not trust a client-supplied identity
+header. Only enable it behind a trusted identity gateway that validates the
+header before forwarding requests.
 
 ## Included Shape
 
